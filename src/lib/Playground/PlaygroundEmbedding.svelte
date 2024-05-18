@@ -8,8 +8,20 @@
 
     let query = "";
     let model = "MiniLM";
-    let customEmbeddingUrl = "";
-    let data:string[] = [];
+    let customEmbeddingUrl = "http://127.0.0.1:7997/";
+    let data:string[] = [    "I like to eat apples in the morning.",
+    "Fruit salads with berries are delicious.",
+    "banana",
+    "apple pie",
+    "사과",
+    "바나나",
+    "orange",
+    "I boil oranges every night and eat them",
+    "이미 오랜지 난 옛날 얘기다",
+    "fruit",
+    "リンゴ",
+    "オレンジ"];
+    
     let dataresult:[string, number][] = [];
     let running = false;
 
