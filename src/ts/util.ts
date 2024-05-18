@@ -595,6 +595,13 @@ export function applyMarkdownToNode(node: Node) {
                     for(let i=0;i<parentStyle.length;i++){
                         span.style.setProperty(parentStyle[i], parentStyle.getPropertyValue(parentStyle[i]))
                     }   
+                    // // for element in span too
+                    // for(const child of span.children){
+                    //     const childElement = child as HTMLElement;
+                    //     for(let i=0;i<parentStyle.length;i++){
+                    //         childElement.style.setProperty(parentStyle[i], parentStyle.getPropertyValue(parentStyle[i]))
+                    //     }
+                    // }
                 }
                 (node as Element)?.replaceWith(span);
                 return
