@@ -25,6 +25,7 @@
     import { postChatFile } from 'src/ts/process/files/multisend';
     import { getInlayImage } from 'src/ts/process/files/image';
     import PlaygroundMenu from '../Playground/PlaygroundMenu.svelte';
+    import { get } from 'svelte/store';
 
     let messageInput:string = ''
     let messageInputTranslate:string = ''
@@ -329,6 +330,9 @@
     }
 
     async function screenShot(){
+        const db = get(DataBase)
+        const customBackgroundColor = db.textScreenColor ?? 'var(--risu-theme-bgcolor)';
+        let saveChatsSeparately = true; // New flag to determine the saving method
         try {
             loadPages = Infinity
             const html2canvas = await import('html-to-image');
@@ -342,6 +346,34 @@
             }
 
             canvases.reverse()
+
+            if (saveChatsSeparately) {
+                loadPages = 20;
+                // Save chats separately and return early
+                for (let i = 0; i < canvases.length; i++) {
+                    const canvas = canvases[i];
+
+                    // Create a new canvas to apply background color
+                    let tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = canvas.width;
+                    tempCanvas.height = canvas.height;
+                    let tempCtx = tempCanvas.getContext('2d');
+                    
+                    tempCtx.fillStyle = customBackgroundColor;
+                    tempCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Draw the original canvas onto the new canvas with background
+                    tempCtx.drawImage(canvas, 0, 0);
+
+                    await downloadFile(`${i}-chat.png`, Buffer.from(tempCanvas.toDataURL('png').split(',').at(-1), 'base64'));
+                    canvas.remove();
+                    tempCanvas.remove();
+                }
+                alertNormal(language.screenshotSaved);
+                loadPages = 10;
+                return;
+            }
+
 
             let mergedCanvas = document.createElement('canvas');
             mergedCanvas.width = 0;
