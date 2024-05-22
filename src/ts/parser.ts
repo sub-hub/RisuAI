@@ -116,12 +116,18 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
             if(type === 'emotion'){
                 const path = emoPaths[name]?.path
                 if(!path){
+                    if(db.dynamicAssets){
+                        return full
+                    }
                     return ''
                 }
                 return `<img src="${path}" alt="${path}" style="${assetWidthString} "/>`
             }
             const path = assetPaths[name]
             if(!path){
+                if(db.dynamicAssets){
+                    return full
+                }
                 return ''
             }
             switch(type){
