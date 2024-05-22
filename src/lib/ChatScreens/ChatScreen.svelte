@@ -57,7 +57,7 @@
             {/if}
         {/if}
         <div class="h-full w-2xl" style:width="{42 * ($DataBase.waifuWidth / 100)}rem" class:halfwp={$selectedCharID >= 0 && $CurrentCharacter.viewScreen !== 'none'}>
-            <DefaultChatScreen customStyle={`${externalStyles}backdrop-filter: blur(4px);`} bind:openChatList bind:openModuleList/>
+            <DefaultChatScreen customStyle={`${externalStyles}backdrop-filter: blur(20px);`} bind:openChatList bind:openModuleList/>
         </div>
     </div>
 {:else if $DataBase.theme === 'waifuMobile'}

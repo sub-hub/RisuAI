@@ -406,7 +406,16 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
         }
     }
     
-
+    const li=dom.body.getElementsByTagName('li')
+    // set all font color to var(--FontColorStandard)
+    for(const l of li){
+        if(l.style.color === 'var(--FontColorStandard)'){
+            continue
+        }
+        l.style.color = 'var(--FontColorStandard)'
+        l.style.fontFamily='ridibatang'
+        l.style.lineHeight='1.5em'
+    }
     // Start translation from the body element
     await translateNode(dom.body);
 
