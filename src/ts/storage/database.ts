@@ -14,7 +14,7 @@ import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "1.103.3"
+export let appVer = "1.105.0"
 export let webAppSubVer = ''
 
 export function setDatabase(data:Database){
@@ -657,6 +657,7 @@ export interface Database{
     textAreaTextSize:number
     combineTranslation:boolean
     dynamicAssets:boolean
+    dynamicAssetsEditDisplay:boolean
 }
 
 export interface customscript{
@@ -772,6 +773,7 @@ export interface character{
     vits?: OnnxModelFiles
     realmId?:string
     imported?:boolean
+    trashTime?:number
 }
 
 
@@ -815,6 +817,7 @@ export interface groupChat{
     oneAtTime?:boolean
     virtualscript?:string
     lorePlus?:boolean
+    trashTime?:number
 }
 
 export interface botPreset{
@@ -914,6 +917,7 @@ export interface Chat{
     localLore: loreBook[]
     sdData?:string
     supaMemoryData?:string
+    hypaV2Data?:HypaV2Data
     lastMemory?:string
     suggestMessages?:string[]
     isStreaming?:boolean
@@ -1217,8 +1221,9 @@ import { encode as encodeMsgpack, decode as decodeMsgpack } from "msgpackr";
 import * as fflate from "fflate";
 import type { OnnxModelFiles } from '../process/transformers';
 import type { RisuModule } from '../process/modules';
+import type { HypaV2Data } from '../process/memory/hypav2';
 
-export async function downloadPreset(id:number){
+export async function downloadPreset(id:number, type:'json'|'risupreset'|'return' = 'json'){
     saveCurrentPreset()
     let db = get(DataBase)
     let pres = structuredClone(db.botPresets[id])
@@ -1229,21 +1234,37 @@ export async function downloadPreset(id:number){
     pres.proxyKey = ''
     pres.textgenWebUIStreamURL=  ''
     pres.textgenWebUIBlockingURL=  ''
-    const sel = parseInt(await alertSelect(['RISUPRESET (recommended)','JSON']))
-    if(sel === 1){
+    if(type === 'json'){
         downloadFile(pres.name + "_preset.json", Buffer.from(JSON.stringify(pres, null, 2)))
     }
-    else{
-        downloadFile(pres.name + "_preset.risupreset", fflate.compressSync(encodeMsgpack({
+    else if(type === 'risupreset' || type === 'return'){
+        const buf = fflate.compressSync(encodeMsgpack({
             presetVersion: 0,
             type: 'preset',
             pres: await encryptBuffer(
                 encodeMsgpack(pres),
                 'risupreset'
             )
-        })))
+        }))
+        if(type === 'risupreset'){
+            downloadFile(pres.name + "_preset.risupreset", buf)
+        }
+        else{
+            return {
+                data: pres,
+                buf
+            }
+        }
+
     }
+
     alertNormal(language.successExport)
+
+
+    return {
+        data: pres,
+        buf: null
+    }
 }
 
 

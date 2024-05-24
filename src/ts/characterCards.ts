@@ -5,7 +5,7 @@ import { checkNullish, decryptBuffer, encryptBuffer, selectFileByDom, selectMult
 import { language } from "src/lang"
 import { v4 as uuidv4 } from 'uuid';
 import { characterFormatUpdate } from "./characters"
-import { AppendableBuffer, checkCharOrder, downloadFile, loadAsset, LocalWriter, readImage, saveAsset, VirtualWriter } from "./storage/globalApi"
+import { AppendableBuffer, checkCharOrder, downloadFile, loadAsset, LocalWriter, openURL, readImage, saveAsset, VirtualWriter } from "./storage/globalApi"
 import { CurrentCharacter, selectedCharID } from "./stores"
 import { convertImage, hasher } from "./parser"
 import { CCardLib } from '@risuai/ccardlib'
@@ -293,35 +293,27 @@ function convertOldTavernAndJSON(charaData:OldTavernChar, imgp:string|undefined 
     }
 }
 
-export async function exportChar(charaID:number) {
+export async function exportChar(charaID:number):Promise<string> {
     const db = get(DataBase)
     let char = structuredClone(db.characters[charaID])
 
     if(char.type === 'group'){
-        return
+        return ''
     }
 
     if(!char.image){
         alertError('Image Required')
-        return
-    }
-    const conf = await alertConfirm(language.exportConfirm)
-    if(!conf){
-        return
+        return ''
     }
 
     const option = await alertCardExport()
-    if(option.type === 'cancel'){
-        return
-    }
-    else if(option.type === 'rcc'){
-        char.license = option.license
-        exportSpecV2(char, 'rcc', {password:option.password})
-    }
-    else{
+    if(option.type === ''){
         exportSpecV2(char,'png')
     }
-    return
+    else{
+        return option.type
+    }
+    return ''
 }
 
 
@@ -745,6 +737,12 @@ export async function exportSpecV2(char:character, type:'png'|'json'|'rcc' = 'pn
     }
 }
 
+export async function shareRisuHub3() {
+    
+
+}
+
+
 export async function shareRisuHub2(char:character, arg:{
     nsfw: boolean,
     tag:string
@@ -772,6 +770,14 @@ export async function shareRisuHub2(char:character, arg:{
     
         const writer = new VirtualWriter()
         await exportSpecV2(char, 'png', {writer: writer})
+        const dat = Buffer.from(writer.buf.buffer).toString('base64') + '&' + 'rt.png'
+
+        openURL(`https://realm.risuai.net/hub/realm/upload#filedata=${encodeURIComponent(dat)}`)
+
+        let testMode = true
+        if(testMode){
+            return
+        }
     
         const fetchPromise = fetch(hubURL + '/hub/realm/upload', {
             method: "POST",
@@ -808,85 +814,6 @@ export async function shareRisuHub2(char:character, arg:{
 
 }
 
-export async function shareRisuHub(char:character, arg:{
-    nsfw: boolean,
-    tag:string
-    license: string
-    anon: boolean
-}) {
-    char = structuredClone(char)
-    char.license = arg.license
-    let tagList = arg.tag.split(',')
-    
-    if(arg.nsfw){
-        tagList.push("nsfw")
-    }
-
-    
-
-    let tags = tagList.filter((v, i) => {
-        return (!!v) && (tagList.indexOf(v) === i)
-    })
-    char.tags = tags
-
-
-    let img = await readImage(char.image)
-
-    try{
-        const card = await createBaseV2(char)
-        let resources:[string,string][] = []
-        if(card.data.extensions.risuai.emotions && card.data.extensions.risuai.emotions.length > 0){
-            for(let i=0;i<card.data.extensions.risuai.emotions.length;i++){
-                alertStore.set({
-                    type: 'wait',
-                    msg: `Loading... (Adding Emotions ${i} / ${card.data.extensions.risuai.emotions.length})`
-                })
-                const data = card.data.extensions.risuai.emotions[i][1]
-                const rData = await readImage(data)
-                resources.push([data, Buffer.from(await convertImage(rData)).toString('base64')])
-            }
-        }
-
-        
-
-        
-        if(card.data.extensions.risuai.additionalAssets && card.data.extensions.risuai.additionalAssets.length > 0){
-            for(let i=0;i<card.data.extensions.risuai.additionalAssets.length;i++){
-                alertStore.set({
-                    type: 'wait',
-                    msg: `Loading... (Adding Additional Assets ${i} / ${card.data.extensions.risuai.additionalAssets.length})`
-                })
-                const data = card.data.extensions.risuai.additionalAssets[i][1]
-                const rData = await readImage(data)
-                resources.push([data, Buffer.from(await convertImage(rData)).toString('base64')])
-            }
-        }
-
-        const da = await fetch(hubURL + '/hub/upload', {
-            method: "POST",
-            body: JSON.stringify({
-                card: card,
-                img: Buffer.from(img).toString('base64'),
-                resources: resources,
-                token: get(DataBase)?.account?.token,
-                username: arg.anon ? '' : (get(DataBase)?.account?.id),
-                apiver: 3
-            })
-        })
-
-        if(da.status !== 200){
-            alertError(await da.text())
-        }
-        else{
-            alertMd(await da.text())
-        }
-    }
-    catch(e){
-        alertError(`${e}`)
-    }
-
-}
-
 export type hubType = {
     name:string
     desc: string
@@ -912,6 +839,7 @@ export async function getRisuHub(arg:{
     sort:string
 }):Promise<hubType[]> {
     try {
+        arg.search += ' __shared'
         const stringArg = `search==${arg.search}&&page==${arg.page}&&nsfw==${arg.nsfw}&&sort==${arg.sort}`
 
         const da = await fetch(hubURL + '/realm/' + encodeURIComponent(stringArg))

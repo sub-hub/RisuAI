@@ -1,6 +1,6 @@
 import { get } from "svelte/store";
 import { exportSpecV2 } from "./characterCards";
-import { VirtualWriter } from "./storage/globalApi";
+import { VirtualWriter, isTauri, openURL } from "./storage/globalApi";
 import { sleep } from "./util";
 import { CurrentCharacter } from "./stores";
 import { DataBase, type character } from "./storage/database";
@@ -16,31 +16,26 @@ window.addEventListener("message", (event) => {
     }
 });
 
-export async function shareRealmCard() {
+export async function shareRealmCardData():Promise<{ name: ArrayBuffer; data: ArrayBuffer; }> {
     const char = structuredClone(get(CurrentCharacter)) as character
+    const trimedName = char.name.replace(/[^a-zA-Z0-9]/g, '') || 'character';
     const writer = new VirtualWriter()
+    const namebuf = new TextEncoder().encode(trimedName + '.png')
     await exportSpecV2(char, 'png', {writer: writer})
-    openRealm(char.name, writer.buf.buffer)
+    alertStore.set({
+        type: 'none',
+        msg: ''
+    })
+    return {
+        name: namebuf.buffer,
+        data: writer.buf.buffer.buffer
+    }
 }
 
 export async function openRealm(name:string,data:ArrayBuffer) {
     const tk = get(DataBase)?.account?.token;
     const id = get(DataBase)?.account?.id
-    const win = window.open(`https://realm.risuai.net/upload?token=${tk}&token_id=${id}`, "_blank");
-    pong = false;
-    while(true){
-        if(pong){
-            break;
-        }
-        win.postMessage("ping", "https://realm.risuai.net")
-        await sleep(500);
-    }
-    alertStore.set({
-        type: 'none',
-        msg: ''
-    })
-
-    const nameBuf = new TextEncoder().encode(name);
-
-    win.postMessage("filedata", "https://realm.risuai.net", [nameBuf,data]);
+    const trimedName = name.replace(/[^a-zA-Z0-9]/g, '') || 'character';
+    const filedata = encodeURIComponent(Buffer.from(data).toString('base64')) + `&${trimedName}.png`;
+    const url = `https://realm.risuai.net/upload?token=${tk}&token_id=${id}#filedata=${filedata}`
 }

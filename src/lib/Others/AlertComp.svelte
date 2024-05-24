@@ -17,21 +17,26 @@
     import { getFetchData } from 'src/ts/storage/globalApi';
     import { CurrentChat } from "src/ts/stores";
     import { tokenize } from "src/ts/tokenizer";
+    import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
     let btn
     let input = ''
     let cardExportType = ''
     let cardExportPassword = ''
     let cardLicense = ''
     let generationInfoMenuIndex = 0
-    $: (() => {
+    $: {
         if(btn){
             btn.focus()
         }
         if($alertStore.type !== 'input'){
             input = ''
         }
-        
-    })()
+        if($alertStore.type !== 'cardexport'){
+            cardExportType = ''
+            cardExportPassword = ''
+            cardLicense = ''
+        }
+    }
 
     const beautifyJSON = (data:string) =>{
         try {
@@ -77,7 +82,7 @@
                 <div class="text-textcolor">You should accept RisuRealm's <a class="text-green-600 hover:text-green-500 transition-colors duration-200 cursor-pointer" on:click={() => {
                     openURL('https://sv.risuai.xyz/hub/tos')
                 }}>Terms of Service</a> to continue</div>
-            {:else if $alertStore.type !== 'select' && $alertStore.type !== 'requestdata' && $alertStore.type !== 'addchar'}
+            {:else if $alertStore.type !== 'select' && $alertStore.type !== 'requestdata' && $alertStore.type !== 'addchar' && $alertStore.type !== 'hypaV2'}
                 <span class="text-gray-300">{$alertStore.msg}</span>
                 {#if $alertStore.submsg}
                     <span class="text-gray-500 text-sm">{$alertStore.submsg}</span>
@@ -254,6 +259,47 @@
                         {/if}
                     {/await}
                 {/if}
+            {:else if $alertStore.type === 'hypaV2'}
+                <div class="flex flex-wrap gap-2 mb-4 max-w-full w-124">
+                    <Button selected={generationInfoMenuIndex === 0} size="sm" on:click={() => {generationInfoMenuIndex = 0}}>
+                        Chunks
+                    </Button>
+                    <Button selected={generationInfoMenuIndex === 1} size="sm" on:click={() => {generationInfoMenuIndex = 1}}>
+                        Summarized
+                    </Button>
+                    <button class="ml-auto" on:click={() => {
+                        alertStore.set({
+                            type: 'none',
+                            msg: ''
+                        })
+                    }}>✖</button>
+                </div>
+                {#if generationInfoMenuIndex === 0}
+                    <div class="flex flex-col gap-2 w-full">
+                        {#each $CurrentChat.hypaV2Data.chunks as chunk}
+                            <TextAreaInput bind:value={chunk.text} />
+                        {/each}
+
+                        <Button on:click={() => {
+                            $CurrentChat.hypaV2Data.chunks.push({
+                                text: '',
+                                targetId: 'all'
+                            })
+                            $CurrentChat.hypaV2Data.chunks = $CurrentChat.hypaV2Data.chunks
+                        }}>+</Button>
+                    </div>
+                {:else}
+                    {#each $CurrentChat.hypaV2Data.chunks as chunk, i}
+                        <div class="flex flex-col p-2 rounded-md border-darkborderc border">
+                            {#if i === 0}
+                                <span class="text-green-500">Active</span>
+                            {:else}
+                                <span>Inactive</span>
+                            {/if}
+                            <TextAreaInput bind:value={chunk.text} />
+                        </div>
+                    {/each}
+                {/if}
             {:else if $alertStore.type === 'addchar'}
                 <div class="w-2xl flex flex-col max-w-full">
 
@@ -330,7 +376,7 @@
         <div class="bg-darkbg rounded-md p-4 max-w-full flex flex-col w-2xl" on:click|stopPropagation>
             <h1 class="font-bold text-2xl w-full">
                 <span>
-                    Export Character
+                    {language.shareExport}
                 </span>
                 <button class="float-right text-textcolor2 hover:text-green-500" on:click={() => {
                     alertStore.set({
@@ -345,29 +391,27 @@
                     <XIcon />
                 </button>
             </h1>
-            <span class="text-textcolor mt-4">Type</span>
+            <span class="text-textcolor mt-4">{language.type}</span>
             {#if cardExportType === ''}
-                <span class="text-textcolor2 text-sm">{language.ccv2Desc}</span>
+                {#if $alertStore.submsg !== 'preset'}
+                    <span class="text-textcolor2 text-sm">{language.risupresetDesc}</span>
+                {:else}
+                    <span class="text-textcolor2 text-sm">{language.ccv2Desc}</span>
+                {/if}
+            {:else if cardExportType === 'json'}
+                <span class="text-textcolor2 text-sm">{language.jsonDesc}</span>
             {:else}
-                <span class="text-textcolor2 text-sm">{language.rccDesc}</span>
+                <span class="text-textcolor2 text-sm">{language.realmDesc}</span>
             {/if}
             <div class="flex items-center flex-wrap mt-2">
-                <button class="bg-bgcolor px-2 py-4 rounded-lg flex-1" class:ring-1={cardExportType === ''} on:click={() => {cardExportType = ''}}>Character Card V2</button>
-                <button class="bg-bgcolor px-2 py-4 rounded-lg ml-2 flex-1" class:ring-1={cardExportType === 'rcc'} on:click={() => {cardExportType = 'rcc'}}>Risu RCC</button>
+                {#if $alertStore.submsg === 'preset'}
+                    <button class="bg-bgcolor px-2 py-4 rounded-lg flex-1" class:ring-1={cardExportType === ''} on:click={() => {cardExportType = ''}}>Risupreset</button>
+                    <button class="bg-bgcolor px-2 py-4 rounded-lg ml-2 flex-1" class:ring-1={cardExportType === 'json'} on:click={() => {cardExportType = 'json'}}>JSON</button>
+                    <button class="bg-bgcolor px-2 py-4 rounded-lg ml-2 flex-1" class:ring-1={cardExportType === 'realm'} on:click={() => {cardExportType = 'realm'}}>RisuRealm</button>
+                {:else}
+                    <button class="bg-bgcolor px-2 py-4 rounded-lg flex-1" class:ring-1={cardExportType === ''} on:click={() => {cardExportType = ''}}>Character Card V2</button>
+                {/if}
             </div>
-            {#if cardExportType === 'rcc'}
-                <span class="text-textcolor mt-4">{language.password}</span>
-                <span class="text-textcolor2 text-sm">{language.passwordDesc}</span>
-                <TextInput placeholder="" bind:value={cardExportPassword} />
-                <span class="text-textcolor mt-4">{language.license}</span>
-                <span class="text-textcolor2 text-sm">{language.licenseDesc}</span>
-                <SelectInput bind:value={cardLicense}>
-                    <OptionInput value="">None</OptionInput>
-                    {#each Object.keys(CCLicenseData) as ccl}
-                        <OptionInput value={ccl}>{CCLicenseData[ccl][2]} ({CCLicenseData[ccl][1]})</OptionInput>
-                    {/each}
-                </SelectInput>
-            {/if}
             <Button className="mt-4" on:click={() => {
                 alertStore.set({
                     type: 'none',
@@ -377,7 +421,7 @@
                         license: cardLicense
                     })
                 })
-            }}>{language.export}</Button>
+            }}>{cardExportType === 'realm' ? language.shareCloud : language.export}</Button>
         </div>
     </div>
 

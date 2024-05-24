@@ -2,22 +2,21 @@
     import { language } from "../../lang";
     import { tokenizeAccurate } from "../../ts/tokenizer";
     import { DataBase, saveImage as saveAsset, type Database, type character, type groupChat } from "../../ts/storage/database";
-    import { selectedCharID } from "../../ts/stores";
+    import { ShowRealmFrameStore, selectedCharID } from "../../ts/stores";
     import { PlusIcon, SmileIcon, TrashIcon, UserIcon, ActivityIcon, BookIcon, User, CurlyBraces, Volume2Icon } from 'lucide-svelte'
     import Check from "../UI/GUI/CheckInput.svelte";
-    import { addCharEmotion, addingEmotion, getCharImage, rmCharEmotion, selectCharImg, makeGroupImage } from "../../ts/characters";
+    import { addCharEmotion, addingEmotion, getCharImage, rmCharEmotion, selectCharImg, makeGroupImage, removeChar } from "../../ts/characters";
     import LoreBook from "./LoreBook/LoreBookSetting.svelte";
-    import { alertConfirm, alertNormal, alertSelectChar, alertTOS } from "../../ts/alert";
+    import { alertConfirm, alertNormal, alertSelectChar, alertTOS, showHypaV2Alert } from "../../ts/alert";
     import BarIcon from "./BarIcon.svelte";
     import { findCharacterbyId, getAuthorNoteDefaultText, selectMultipleFile } from "../../ts/util";
     import { onDestroy } from "svelte";
     import {isEqual} from 'lodash'
     import Help from "../Others/Help.svelte";
-    import { exportChar, shareRisuHub } from "src/ts/characterCards";
+    import { exportChar } from "src/ts/characterCards";
     import { getElevenTTSVoices, getWebSpeechTTSVoices, getVOICEVOXVoices, oaiVoices, getNovelAIVoices, FixNAITTS } from "src/ts/process/tts";
     import { checkCharOrder, getFileSrc } from "src/ts/storage/globalApi";
     import { addGroupChar, rmCharFromGroup } from "src/ts/process/group";
-    import RealmUpload from "../UI/Realm/RealmUpload.svelte";
     import TextInput from "../UI/GUI/TextInput.svelte";
     import NumberInput from "../UI/GUI/NumberInput.svelte";
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
@@ -30,11 +29,9 @@
     import { updateInlayScreen } from "src/ts/process/inlayScreen";
     import { registerOnnxModel } from "src/ts/process/transformers";
     import MultiLangInput from "../UI/GUI/MultiLangInput.svelte";
-  import { shareRealmCard } from "src/ts/realm";
     
 
     let subMenu = 0
-    let openHubUpload = false
     let emos:[string, string][] = []
     let tokens = {
         desc: 0,
@@ -672,11 +669,6 @@
         <span class="text-textcolor mt-2">{language.additionalText} <Help key="additionalText" /></span>
         <TextAreaInput margin="both" autocomplete="off" bind:value={currentChar.data.additionalText}></TextAreaInput>
 
-
-        {#if currentChar.data.chats[currentChar.data.chatPage].supaMemoryData && currentChar.data.chats[currentChar.data.chatPage].supaMemoryData.length > 4 || currentChar.data.supaMemory}
-            <span class="text-textcolor">{language.SuperMemory}</span>
-            <TextAreaInput margin="both" autocomplete="off" bind:value={currentChar.data.chats[currentChar.data.chatPage].supaMemoryData}></TextAreaInput>
-        {/if}
         {#if $DataBase.showUnrecommended || currentChar.data.personality.length > 3}
             <span class="text-textcolor">{language.personality} <Help key="personality" unrecommended/></span>
             <TextAreaInput margin="both" autocomplete="off" bind:value={currentChar.data.personality}></TextAreaInput>
@@ -816,6 +808,21 @@
             <span> <Help key="utilityBot" name={language.utilityBot}/></span>
         </div>
 
+        {#if $DataBase.supaMemoryType === 'hypaV2'}
+            <Button on:click={() => {
+                currentChar.data.chats[currentChar.data.chatPage].hypaV2Data ??= {
+                    chunks: [],
+                    mainChunks: []
+                }
+                showHypaV2Alert()
+            }}>
+                {language.HypaMemory} V2 Data
+            </Button>
+        {:else if currentChar.data.chats[currentChar.data.chatPage].supaMemoryData && currentChar.data.chats[currentChar.data.chatPage].supaMemoryData.length > 4 || currentChar.data.supaMemory}
+            <span class="text-textcolor">{language.SuperMemory}</span>
+            <TextAreaInput margin="both" autocomplete="off" bind:value={currentChar.data.chats[currentChar.data.chatPage].supaMemoryData}></TextAreaInput>
+        {/if}
+
         {#if currentChar.data.license !== 'CC BY-NC-SA 4.0'
             && currentChar.data.license !== 'CC BY-SA 4.0'
             && currentChar.data.license !== 'CC BY-ND 4.0'
@@ -823,7 +830,7 @@
             || $DataBase.tpo
         }
             <Button size="lg" on:click={async () => {
-                exportChar($selectedCharID)
+                const res = await exportChar($selectedCharID)
             }} className="mt-2">{language.exportCharacter}</Button>
         {/if}
 
@@ -836,8 +843,7 @@
                     return
                 }
                 if(await alertTOS()){
-                    // openHubUpload = true
-                    shareRealmCard()
+                    $ShowRealmFrameStore = 'character'
                 }
             }} className="mt-2">
                 {#if currentChar.data.realmId}
@@ -846,10 +852,6 @@
                     {language.shareCloud}
                 {/if}
             </Button>
-        {/if}
-
-        {#if openHubUpload}
-            <RealmUpload bind:char={currentChar.data} close={() => {openHubUpload=false}}/>
         {/if}
     {:else}
         {#if currentChar.data.chats[currentChar.data.chatPage].supaMemoryData && currentChar.data.chats[currentChar.data.chatPage].supaMemoryData.length > 4 || currentChar.data.supaMemory}
@@ -864,20 +866,7 @@
         {/if}
     {/if}
     <Button on:click={async () => {
-        const conf = await alertConfirm(language.removeConfirm + currentChar.data.name)
-        if(!conf){
-            return
-        }
-        const conf2 = await alertConfirm(language.removeConfirm2 + currentChar.data.name)
-        if(!conf2){
-            return
-        }
-        let chars = $DataBase.characters
-        chars.splice($selectedCharID, 1)
-        checkCharOrder()
-        $selectedCharID = -1
-        $DataBase.characters = chars
-
+        removeChar($selectedCharID, currentChar.data.name)
     }} className="mt-2" size="sm">{ currentChar.type === 'group' ? language.removeGroup : language.removeCharacter}</Button>
 {/if}
 

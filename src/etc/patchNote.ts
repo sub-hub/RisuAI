@@ -1,13 +1,14 @@
 export const patchNote = {
-    version: "1.103",
+    version: "1.105",
     content: 
 `
-# Update 1.103
-- Made logit_bias work for all gpt-based multimodal models (#418)
-- Added supports of gpt-4o tokenizer for reverse_proxy (#418)
-- Added GPT-4o in Custom (OpenAI-compatible) (#419)
-- Added Tag autocomplete in RisuRealm upload
-- Fixed GPT-4o image multimodal feature not working properly
+# Update 1.105
+- Reworked RisuRealm share screen
+ - Now it uses RisuRealm iframe instead of GUI provided by app
+- Added RisuRealm preset sharing support
+- Added new preset sharing screen
+- Added {{first_msg_index}} CBS #436
+- Removed RisuRCC dude to low usage
 `
 }
 
