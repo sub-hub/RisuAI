@@ -14,7 +14,7 @@ import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "1.105.0"
+export let appVer = "1.105.1"
 export let webAppSubVer = ''
 
 export function setDatabase(data:Database){
@@ -688,7 +688,8 @@ export interface loreBook{
     loreCache?:{
         key:string
         data:string[]
-    }
+    },
+    useRegex?:boolean
 }
 
 export interface character{
@@ -774,6 +775,17 @@ export interface character{
     realmId?:string
     imported?:boolean
     trashTime?:number
+    nickname?:string
+    source?:string[]
+    group_only_greetings?:string[]
+    creation_date?:number
+    modification_date?:number
+    ccAssets?: Array<{
+        type: string
+        uri: string
+        name: string
+        ext: string
+    }>
 }
 
 
