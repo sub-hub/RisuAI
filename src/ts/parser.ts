@@ -505,7 +505,7 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 let selectedChar = get(selectedCharID)
                 let currentChar = db.characters[selectedChar]
                 if(currentChar && currentChar.type !== 'group'){
-                    return currentChar.name
+                    return currentChar.nickname || currentChar.name
                 }
                 if(chara){
                     if(typeof(chara) === 'string'){
@@ -515,7 +515,7 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                         return chara.name
                     }
                 }
-                return currentChar.name
+                return currentChar.nickname || currentChar.name
             }
             case 'user':{
                 if(matcherArg.consistantChar){
@@ -1030,12 +1030,12 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 return arra[randomIndex]
             }
             else{
-                const arr = p1.split(/\:|\,/g)
+                const arr = p1.replace(/\\,/g, '§X').split(/\:|\,/g)
                 const randomIndex = Math.floor(Math.random() * (arr.length - 1)) + 1
                 if(matcherArg.tokenizeAccurate){
                     return arra[0]
                 }
-                return arr[randomIndex]
+                return arr[randomIndex]?.replace(/§X/g, ',') ?? ''
             }
         }
         if(p1.startsWith('pick')){
@@ -1049,12 +1049,12 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 return arra[randomIndex]
             }
             else{
-                const arr = p1.split(/\:|\,/g)
+                const arr = p1.replace(/\\,/g, '§X').split(/\:|\,/g)
                 const randomIndex = Math.floor(rand() * (arr.length - 1)) + 1
                 if(matcherArg.tokenizeAccurate){
                     return arra[0]
                 }
-                return arr[randomIndex]
+                return arr[randomIndex]?.replace(/§X/g, ',') ?? ''
             }
         }
         if(p1.startsWith('roll')){
@@ -1079,6 +1079,23 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
             const substring = p1.substring(2)
 
             return calcString(substring).toString()
+        }
+        if(p1.startsWith('//')){
+            return ''
+        }
+        if(p1.startsWith('hidden_key:')){
+            return ''
+        }
+        if(p1.startsWith('reverse:')){
+            return p1.substring(
+                p1[8] === ':' ? 9 : 8
+            ).split('').reverse().join('')
+        }
+        if(p1.startsWith('comment:')){
+            if(!matcherArg.displaying){
+                return ''
+            }
+            return `<div class="risu-comment">${p1.substring(p1[8] === ':' ? 9 : 8)}</div>`
         }
         return null        
     } catch (error) {
@@ -1130,7 +1147,7 @@ const smMatcher = (p1:string,matcherArg:matcherArg) => {
             let selectedChar = get(selectedCharID)
             let currentChar = db.characters[selectedChar]
             if(currentChar && currentChar.type !== 'group'){
-                return currentChar.name
+                return currentChar.nickname || currentChar.name
             }
             if(chara){
                 if(typeof(chara) === 'string'){
@@ -1140,7 +1157,7 @@ const smMatcher = (p1:string,matcherArg:matcherArg) => {
                     return chara.name
                 }
             }
-            return currentChar.name
+            return currentChar.nickname || currentChar.name
         }
         case 'user':{
             if(matcherArg.consistantChar){

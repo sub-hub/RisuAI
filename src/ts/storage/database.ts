@@ -14,7 +14,7 @@ import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "1.105.1"
+export let appVer = "1.106.0"
 export let webAppSubVer = ''
 
 export function setDatabase(data:Database){
@@ -830,6 +830,7 @@ export interface groupChat{
     virtualscript?:string
     lorePlus?:boolean
     trashTime?:number
+    nickname?:string
 }
 
 export interface botPreset{
