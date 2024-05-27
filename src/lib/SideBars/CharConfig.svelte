@@ -9,7 +9,7 @@
     import LoreBook from "./LoreBook/LoreBookSetting.svelte";
     import { alertConfirm, alertNormal, alertSelectChar, alertTOS, showHypaV2Alert } from "../../ts/alert";
     import BarIcon from "./BarIcon.svelte";
-    import { findCharacterbyId, getAuthorNoteDefaultText, selectMultipleFile } from "../../ts/util";
+    import { findCharacterbyId, getAuthorNoteDefaultText, parseKeyValue, selectMultipleFile } from "../../ts/util";
     import { onDestroy } from "svelte";
     import {isEqual} from 'lodash'
     import Help from "../Others/Help.svelte";
@@ -246,6 +246,15 @@
     <div class="flex mt-6 items-center">
         <Check bind:check={$DataBase.jailbreakToggle} name={language.jailbreakToggle}/>
     </div>
+
+    {#each parseKeyValue($DataBase.customPromptTemplateToggle) as toggle}
+        <div class="flex mt-2 items-center">
+            <Check check={$DataBase.globalChatVariables[`toggle_${toggle[0]}`] === '1'} name={toggle[1]} onChange={() => {
+                $DataBase.globalChatVariables[`toggle_${toggle[0]}`] = $DataBase.globalChatVariables[`toggle_${toggle[0]}`] === '1' ? '0' : '1'
+            }} />
+        </div>
+    {/each}
+
     
     {#if $DataBase.supaMemoryType !== 'none' || $DataBase.hanuraiEnable}
         {#if $DataBase.hanuraiEnable}
@@ -755,6 +764,9 @@
 
         <span class="text-textcolor mt-2">{language.backgroundHTML} <Help key="backgroundHTML" /></span>
         <TextAreaInput highlight margin="both" autocomplete="off" bind:value={currentChar.data.backgroundHTML}></TextAreaInput>
+
+        <span class="text-textcolor mt-2">{language.defaultVariables} <Help key="defaultVariables" /></span>
+        <TextAreaInput margin="both" autocomplete="off" bind:value={currentChar.data.defaultVariables}></TextAreaInput>
 
         <span class="text-textcolor">{language.creator}</span>
         <TextInput size="sm" autocomplete="off" bind:value={currentChar.data.additionalData.creator} />

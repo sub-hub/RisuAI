@@ -231,7 +231,10 @@ export async function loadLoreBookV3Prompt(){
         fullWordMatching:boolean
     }) => {
         const sliced = messages.slice(messages.length - arg.searchDepth,messages.length)
-        let mText = sliced.join(" ") + recursiveAdditionalPrompt
+        arg.keys = arg.keys.map(key => key.trim()).filter(key => key.length > 0)
+        let mText = sliced.map((msg) => {
+            return msg.data
+        }).join('||')
         if(arg.regex){
             const regexString = arg.keys[0]
             if(!regexString.startsWith('/')){
@@ -247,22 +250,28 @@ export async function loadLoreBookV3Prompt(){
                     return false
                 }
             }
+            return false
         }
 
         mText = mText.toLowerCase()
 
         if(arg.fullWordMatching){
             const splited = mText.split(' ')
-            return arg.keys.some((key) => {
-                return splited.includes(key)
-            })
+            for(const key of arg.keys){
+                if(splited.includes(key)){
+                    return true
+                }
+            }
         }
         else{
             mText = mText.replace(/ /g,'')
-            return arg.keys.some((key) => {
-                return mText.includes(key.toLowerCase())
-            })
+            for(const key of arg.keys){
+                if(mText.includes(key)){
+                    return true
+                }
+            }
         }
+        return false
     
     }
 
@@ -281,6 +290,9 @@ export async function loadLoreBookV3Prompt(){
         matching = false
         for(let i=0;i<fullLore.length;i++){
             if(activatedIndexes.includes(i)){
+                continue
+            }
+            if(!fullLore[i].alwaysActive && !fullLore[i].key){
                 continue
             }
             let activated = true
@@ -360,6 +372,9 @@ export async function loadLoreBookV3Prompt(){
                         const int = parseInt(arg[0])
                         if(Number.isNaN(int)){
                             return false
+                        }
+                        if(((char.firstMsgIndex ?? -1) + 1) !== int){
+                            activated = false
                         }
                     }
                     case 'position':{
@@ -496,7 +511,7 @@ export async function loadLoreBookV3Prompt(){
     })
 
     return {
-        actives: activesFiltered,
+        actives: activesFiltered.reverse()
     }
 
 }

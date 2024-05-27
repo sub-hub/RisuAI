@@ -9,7 +9,7 @@ import { get } from 'svelte/store';
 import css from '@adobe/css-tools'
 import { selectedCharID } from './stores';
 import { calcString } from './process/infunctions';
-import { findCharacterbyId, sfc32, uuidtoNumber } from './util';
+import { findCharacterbyId, parseKeyValue, sfc32, uuidtoNumber } from './util';
 import { getInlayImage } from './process/files/image';
 import { autoMarkNew } from './plugins/automark';
 import { getModuleLorebooks } from './process/modules';
@@ -843,6 +843,9 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                     }
                     return null
                 }
+                case 'getglobalvar':{
+                    return getGlobalChatVar(v)
+                }
                 case 'button':{
                     return `<button class="button-default" risu-trigger="${arra[2]}">${arra[1]}</button>`
                 }
@@ -1518,7 +1521,23 @@ export function getChatVar(key:string){
     }
     const chat = char.chats[char.chatPage]
     chat.scriptstate = chat.scriptstate ?? {}
-    return (chat.scriptstate['$' + key])?.toString() ?? 'null'
+    const state = (chat.scriptstate['$' + key])
+    if(state === undefined || state === null){
+        const defaultVariables = parseKeyValue(char.defaultVariables).concat(parseKeyValue(db.templateDefaultVariables))
+        const findResult = defaultVariables.find((f) => {
+            return f[0] === key
+        })
+        if(findResult){
+            return findResult[1]
+        }
+        return 'null'
+    }
+    return state.toString()
+}
+
+export function getGlobalChatVar(key:string){
+    const db = get(DataBase)
+    return db.globalChatVariables[key] ?? 'null'
 }
 
 export function setChatVar(key:string, value:string){

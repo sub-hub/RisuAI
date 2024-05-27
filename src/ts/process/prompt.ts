@@ -1,4 +1,6 @@
+import { get } from "svelte/store";
 import { tokenizeAccurate } from "../tokenizer";
+import type { Database } from "../storage/database";
 
 export type PromptItem = PromptItemPlain|PromptItemTyped|PromptItemChat|PromptItemAuthorNote;
 export type PromptType = PromptItem['type'];

@@ -2,12 +2,12 @@
     import type { character, groupChat } from "src/ts/storage/database";
     import { DataBase } from "src/ts/storage/database";
     import TextInput from "../UI/GUI/TextInput.svelte";
-    import { DownloadIcon, EditIcon, FolderUpIcon, MenuIcon, TrashIcon } from "lucide-svelte";
+    import { DownloadIcon, PencilIcon, FolderUpIcon, MenuIcon, TrashIcon } from "lucide-svelte";
     import { exportChat, importChat } from "src/ts/characters";
     import { alertConfirm, alertError, alertSelect } from "src/ts/alert";
     import { language } from "src/lang";
     import Button from "../UI/GUI/Button.svelte";
-    import { findCharacterbyId } from "src/ts/util";
+    import { findCharacterbyId, parseKeyValue } from "src/ts/util";
     import CheckInput from "../UI/GUI/CheckInput.svelte";
     import { createMultiuserRoom } from "src/ts/sync/multiuser";
     import { CurrentCharacter } from "src/ts/stores";
@@ -62,7 +62,7 @@
                 <button class="text-textcolor2 hover:text-green-500 mr-1 cursor-pointer" on:click={() => {
                     editMode = !editMode
                 }}>
-                    <EditIcon size={18}/>
+                    <PencilIcon size={18}/>
                 </button>
                 <button class="text-textcolor2 hover:text-green-500 mr-1 cursor-pointer" on:click={async (e) => {
                     e.stopPropagation()
@@ -101,7 +101,7 @@
             <button class="text-textcolor2 hover:text-green-500 cursor-pointer" on:click={() => {
                 editMode = !editMode
             }}>
-                <EditIcon size={18}/>
+                <PencilIcon size={18}/>
             </button>
         </div>
 
@@ -110,6 +110,14 @@
                 <CheckInput bind:check={$DataBase.jailbreakToggle} name={language.jailbreakToggle}/>
             </div>
             
+            {#each parseKeyValue($DataBase.customPromptTemplateToggle) as toggle}
+                <div class="flex mt-2 items-center">
+                    <CheckInput check={$DataBase.globalChatVariables[`toggle_${toggle[0]}`] === '1'} name={toggle[1]} onChange={() => {
+                        $DataBase.globalChatVariables[`toggle_${toggle[0]}`] = $DataBase.globalChatVariables[`toggle_${toggle[0]}`] === '1' ? '0' : '1'
+                    }} />
+                </div>
+            {/each}
+
             {#if $DataBase.supaMemoryType !== 'none' || $DataBase.hanuraiEnable}
                 {#if $DataBase.hanuraiEnable}
                     <div class="flex mt-2 items-center">

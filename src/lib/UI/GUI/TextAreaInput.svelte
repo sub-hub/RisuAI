@@ -35,10 +35,9 @@
     class:mt-2={margin === 'both'}
     bind:this={highlightDom}
 >
-    {#if !highlight || !CSS.highlights}
+    {#if !highlight || !CSS.highlights || isFirefox}
         <textarea
             class="w-full h-full bg-transparent focus-within:outline-none resize-none absolute top-0 left-0 z-10 overflow-y-auto"
-            class:text-transparent={highlight}
             class:px-4={padding}
             class:py-2={padding}
             {autocomplete}
@@ -73,13 +72,14 @@
             on:keydown={(e) => {
                 onInput()
             }}
+            translate="no"
         >{value ?? ''}</div>
     {/if}
 </div>
 <script lang="ts">
     import { textAreaSize, textAreaTextSize } from 'src/ts/gui/guisize'
     import { highlighter, getNewHighlightId, removeHighlight } from 'src/ts/gui/highlight'
-    import { sleep } from 'src/ts/util';
+    import { isFirefox, sleep } from 'src/ts/util';
     import { onDestroy, onMount } from 'svelte';
     export let size: 'xs'|'sm'|'md'|'lg'|'xl'|'default' = 'default'
     export let autocomplete: 'on'|'off' = 'off'

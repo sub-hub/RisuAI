@@ -10,6 +10,8 @@ import { appWindow } from '@tauri-apps/api/window';
 import { isTauri } from "./storage/globalApi"
 import { Marked } from "marked"
 
+export const isFirefox = navigator.userAgent.toLowerCase().indexOf('firefox') > -1
+
 const mconverted = new Marked({
     gfm: true,
     breaks: true,
@@ -974,4 +976,21 @@ export const isKnownUri = (uri:string) => {
             || uri.startsWith('https://')
             || uri.startsWith('ccdefault:')
             || uri.startsWith('embeded://')
+}
+
+export function parseKeyValue(template:string){
+    if(!template){
+        return []
+    }
+
+    const keyValue:[string, string][] = []
+
+    for(const line of template.split('\n')){
+        const [key, value] = line.split('=')
+        if(key && value){
+            keyValue.push([key, value])
+        }
+    }
+
+    return keyValue
 }

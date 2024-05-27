@@ -39,6 +39,7 @@ interface requestDataArgument{
     useEmotion?:boolean
     continue?:boolean
     chatId?:string
+    noMultiGen?:boolean
 }
 
 type requestDataResponse = {
@@ -132,6 +133,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
     arg.continue = arg.continue ?? false
     let biasString = arg.biasString ?? []
     const aiModel = (model === 'model' || (!db.advancedBotSettings)) ? db.aiModel : db.subModel
+    const multiGen = (db.genTime > 1 && aiModel.startsWith('gpt') && (!arg.continue)) && (!arg.noMultiGen)
 
     let raiModel = aiModel
     if(aiModel === 'reverse_proxy'){
@@ -545,7 +547,6 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
             if(risuIdentify){
                 headers["X-Proxy-Risu"] = 'RisuAI'
             }
-            const multiGen = (db.genTime > 1 && aiModel.startsWith('gpt') && (!arg.continue))
             if(multiGen){
                 // @ts-ignore
                 body.n = db.genTime
@@ -1526,6 +1527,89 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                 result: readableStream
             }
         }
+        case 'cohere-command-r':
+        case 'cohere-command-r-plus':{
+            const modelName = aiModel.replace('cohere-', '')
+            let lastChatPrompt = ''
+            let preamble = ''
+
+            const lastChat = formated[formated.length-1]
+            if(lastChat.role === 'user'){
+                lastChatPrompt = lastChat.content
+                formated.pop()
+            }
+
+            const firstChat = formated[0]
+            if(firstChat.role === 'system'){
+                preamble = firstChat.content
+                formated.shift()
+            }
+
+            let body = {
+                message: lastChatPrompt,
+                chat_history: formated.map((v) => {
+                    if(v.role === 'assistant'){
+                        return {
+                            role: 'CHATBOT',
+                            content: v.content
+                        }
+                    }
+                    if(v.role === 'system'){
+                        return {
+                            role: 'SYSTEM',
+                            content: v.content
+                        }
+                    }
+                    if(v.role === 'user'){
+                        return {
+                            role: 'USER',
+                            content: v.content
+                        }
+                    }
+                    return null
+                }).filter((v) => v !== null),
+                temperature: temperature,
+                k: db.top_k,
+                p: (db.top_p > 0.99) ? 0.99 : (db.top_p < 0.01) ? 0.01 : db.top_p,
+                presence_penalty: arg.PresensePenalty || (db.PresensePenalty / 100),
+                frequency_penalty: arg.frequencyPenalty || (db.frequencyPenalty / 100),
+            }
+
+            if(preamble){
+                // @ts-ignore
+                body.preamble = preamble
+            }
+
+            const res = await globalFetch('https://api.cohere.com/v1/chat', {
+                method: "POST",
+                headers: {
+                    "Authorization": "Bearer " + db.cohereAPIKey,
+                    "Content-Type": "application/json"
+                },
+                body: body
+            })
+
+            if(!res.ok){
+                return {
+                    type: 'fail',
+                    result: JSON.stringify(res.data)
+                }
+            }
+
+            const result = res.data.text
+            if(!result){
+                return {
+                    type: 'fail',
+                    result: JSON.stringify(res.data)
+                }
+            }
+
+            return {
+                type: 'success',
+                result: result
+            }
+        }
+
         default:{     
             if(raiModel.startsWith('claude-3')){
                 let replacerURL = (aiModel === 'reverse_proxy') ? (db.forceReplaceUrl) : ('https://api.anthropic.com/v1/messages')

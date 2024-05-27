@@ -103,6 +103,10 @@ export function getModelName(name:string){
             return 'Gemini 1.5 Flash'
         case 'ollama-hosted':
             return 'Ollama'
+        case 'cohere-command-r':
+            return 'Cohere Command-R'
+        case 'cohere-command-r-plus':
+            return 'Cohere Command-R Plus'
         default:
             if(name.startsWith("horde:::")){
                 const split = name.split(":::")
@@ -123,6 +127,12 @@ export function getModelName(name:string){
 export function getModelShortName(model:string){
     if(model.startsWith("gpt35")){
         return "GPT-3.5"
+    }
+    if(model.startsWith("cohere-")){
+        return model.replace("cohere-", "")
+    }
+    if(model.startsWith("gpt4o")){
+        return "GPT-4o"
     }
     if(model.startsWith("gpt4")){
         return "GPT-4"

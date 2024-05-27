@@ -14,7 +14,7 @@ import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "1.106.0"
+export let appVer = "1.107.2"
 export let webAppSubVer = ''
 
 export function setDatabase(data:Database){
@@ -401,6 +401,11 @@ export function setDatabase(data:Database){
     data.textAreaTextSize ??= 0
     data.combineTranslation ??= false
     data.excludeEmptyAssets ??= true
+    data.customPromptTemplateToggle ??= ''
+    data.globalChatVariables ??= {}
+    data.templateDefaultVariables ??= ''
+    data.hypaAllocatedTokens ??= 3000
+    data.hypaChunkSize ??= 3000
 
     changeLanguage(data.language)
     DataBase.set(data)
@@ -658,6 +663,12 @@ export interface Database{
     combineTranslation:boolean
     dynamicAssets:boolean
     dynamicAssetsEditDisplay:boolean
+    customPromptTemplateToggle:string
+    globalChatVariables:{[key:string]:string}
+    templateDefaultVariables:string
+    hypaAllocatedTokens:number
+    hypaChunkSize:number
+    cohereAPIKey:string
 }
 
 export interface customscript{
@@ -786,6 +797,7 @@ export interface character{
         name: string
         ext: string
     }>
+    defaultVariables?:string
 }
 
 
@@ -831,6 +843,7 @@ export interface groupChat{
     lorePlus?:boolean
     trashTime?:number
     nickname?:string
+    defaultVariables?:string
 }
 
 export interface botPreset{
@@ -878,6 +891,8 @@ export interface botPreset{
     top_a?:number
     openrouterProvider?:string
     useInstructPrompt?:boolean
+    customPromptTemplateToggle?:string
+    templateDefaultVariables?:string
 }
 
 
@@ -1144,7 +1159,9 @@ export function saveCurrentPreset(){
         min_p: db.min_p,
         top_a: db.top_a,
         openrouterProvider: db.openrouterProvider,
-        useInstructPrompt: db.useInstructPrompt
+        useInstructPrompt: db.useInstructPrompt,
+        customPromptTemplateToggle: db.customPromptTemplateToggle ?? "",
+        templateDefaultVariables: db.templateDefaultVariables ?? ""
     }
     db.botPresets = pres
     setDatabase(db)
@@ -1227,6 +1244,8 @@ export function setPreset(db:Database, newPres: botPreset){
     db.top_a = newPres.top_a
     db.openrouterProvider = newPres.openrouterProvider
     db.useInstructPrompt = newPres.useInstructPrompt ?? false
+    db.customPromptTemplateToggle = newPres.customPromptTemplateToggle ?? ''
+    db.templateDefaultVariables = newPres.templateDefaultVariables ?? ''
     return db
 }
 
