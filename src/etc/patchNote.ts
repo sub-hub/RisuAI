@@ -1,16 +1,16 @@
 export const patchNote = {
-    version: "1.107",
+    version: "1.110",
     content: 
 `
-# Update 1.107 (Things & Stuff Update)
-- Added custom toggle system in prompt template
-- Added default variable setting in prompt template and characters
-- Removed experimental flag from HypaMemory V2
-- Added HypaMemory V2 chunk size and allocation size setting
-- Changed old COT toggle to deprecated, dude to new custom toggle system
-- Fixed Supamemory summary not working when generation choices are more than 1
-- Fixed triggerscript not handling undefined values as null
-- Fixed Character Card V3 export not working or missing fields in specific cases
+# Update 1.110 (Modules Update)
+- Improved module GUI
+  - Added search bar
+  - Now modules are ordered by name
+  - Now global modules are ordered in the end of the list in the chat GUI
+- Added module export and import from Realm
+- Added preset import from Realm
+- Added \`{{position::<name>}}\` CBS
+   - This CBS will be replaced to lorebooks that uses \`@@position pt_<name>\` decorator
 `
 }
 

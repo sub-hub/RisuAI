@@ -253,12 +253,12 @@ export async function loadLoreBookV3Prompt(){
             return false
         }
 
-        mText = mText.toLowerCase()
+        mText = mText.toLocaleLowerCase()
 
         if(arg.fullWordMatching){
             const splited = mText.split(' ')
             for(const key of arg.keys){
-                if(splited.includes(key)){
+                if(splited.includes(key.toLocaleLowerCase())){
                     return true
                 }
             }
@@ -266,7 +266,8 @@ export async function loadLoreBookV3Prompt(){
         else{
             mText = mText.replace(/ /g,'')
             for(const key of arg.keys){
-                if(mText.includes(key)){
+                const realKey = key.toLocaleLowerCase().replace(/ /g,'')
+                if(mText.includes(realKey)){
                     return true
                 }
             }
@@ -378,7 +379,7 @@ export async function loadLoreBookV3Prompt(){
                         }
                     }
                     case 'position':{
-                        if(["after_desc", "before_desc", "personality", "scenario"].includes(arg[0])){
+                        if(arg[0].startsWith('pt_') || ["after_desc", "before_desc", "personality", "scenario"].includes(arg[0])){
                             pos = arg[0]
                             return
                         }

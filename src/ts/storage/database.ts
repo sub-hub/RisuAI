@@ -14,7 +14,7 @@ import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "1.107.2"
+export let appVer = "1.110.1"
 export let webAppSubVer = ''
 
 export function setDatabase(data:Database){
@@ -798,6 +798,7 @@ export interface character{
         ext: string
     }>
     defaultVariables?:string
+    lowLevelAccess?:boolean
 }
 
 
@@ -844,6 +845,7 @@ export interface groupChat{
     trashTime?:number
     nickname?:string
     defaultVariables?:string
+    lowLevelAccess?:boolean
 }
 
 export interface botPreset{
@@ -1300,8 +1302,13 @@ export async function downloadPreset(id:number, type:'json'|'risupreset'|'return
 }
 
 
-export async function importPreset(){
-    const f = await selectSingleFile(["json", "preset", "risupreset"])
+export async function importPreset(f:{
+    name:string
+    data:Uint8Array
+}|null = null){
+    if(!f){
+        f = await selectSingleFile(["json", "preset", "risupreset"])
+    }
     if(!f){
         return
     }

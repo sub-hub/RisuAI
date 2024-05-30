@@ -6,29 +6,36 @@ import { get } from "svelte/store";
 import { CurrentCharacter, CurrentChat, selectedCharID } from "../stores";
 import { processMultiCommand } from "./command";
 import { parseKeyValue } from "../util";
+import { alertError, alertInput, alertNormal, alertSelect } from "../alert";
+import type { OpenAIChat } from ".";
+import { HypaProcesser } from "./memory/hypamemory";
+import { requestChatData } from "./request";
+import { generateAIImage } from "./stableDiff";
+import { writeInlayImage } from "./files/image";
 
 export interface triggerscript{
     comment: string;
     type: 'start'|'manual'|'output'|'input'
     conditions: triggerCondition[]
     effect:triggerEffect[]
+    lowLevelAccess?: boolean
 }
 
 export type triggerCondition = triggerConditionsVar|triggerConditionsExists|triggerConditionsChatIndex
 
-export type triggerEffect = triggerEffectSetvar|triggerEffectSystemPrompt|triggerEffectImpersonate|triggerEffectCommand|triggerEffectStop|triggerEffectRunTrigger
+export type triggerEffect = triggerEffectCutChat|triggerEffectModifyChat|triggerEffectImgGen|triggerEffectRegex|triggerEffectRunLLM|triggerEffectCheckSimilarity|triggerEffectSendAIprompt|triggerEffectShowAlert|triggerEffectSetvar|triggerEffectSystemPrompt|triggerEffectImpersonate|triggerEffectCommand|triggerEffectStop|triggerEffectRunTrigger
 
 export type triggerConditionsVar = {
     type:'var'|'value'
     var:string
     value:string
-    operator:'='|'!='|'>'|'<'|'>='|'<='|'null'
+    operator:'='|'!='|'>'|'<'|'>='|'<='|'null'|'true'
 }
 
 export type triggerConditionsChatIndex = {
     type:'chatindex'
     value:string
-    operator:'='|'!='|'>'|'<'|'>='|'<='|'null'
+    operator:'='|'!='|'>'|'<'|'>='|'<='|'null'|'true'
 }
 
 export type triggerConditionsExists ={
@@ -43,6 +50,18 @@ export interface triggerEffectSetvar{
     operator: '='|'+='|'-='|'*='|'/='
     var:string
     value:string
+}
+
+export interface triggerEffectCutChat{
+    type: 'cutchat',
+    start: string,
+    end: string
+}
+
+export interface triggerEffectModifyChat{
+    type: 'modifychat',
+    index: string,
+    value: string
 }
 
 export interface triggerEffectSystemPrompt{
@@ -62,6 +81,22 @@ export interface triggerEffectCommand{
     value: string
 }
 
+export interface triggerEffectRegex{
+    type: 'extractRegex',
+    value: string
+    regex: string
+    flags: string
+    result: string
+    inputVar: string
+}
+
+export interface triggerEffectShowAlert{
+    type: 'showAlert',
+    alertType: string
+    value: string
+    inputVar: string
+}
+
 export interface triggerEffectRunTrigger{
     type: 'runtrigger',
     value: string
@@ -69,6 +104,31 @@ export interface triggerEffectRunTrigger{
 
 export interface triggerEffectStop{
     type: 'stop'
+}
+
+export interface triggerEffectSendAIprompt{
+    type: 'sendAIprompt'
+}
+
+export interface triggerEffectImgGen{
+    type: 'runImgGen',
+    value: string,
+    negValue: string,
+    inputVar: string
+}
+
+
+export interface triggerEffectCheckSimilarity{
+    type: 'checkSimilarity',
+    source: string,
+    value: string,
+    inputVar: string
+}
+
+export interface triggerEffectRunLLM{
+    type: 'runLLM',
+    value: string,
+    inputVar: string
 }
 
 export type additonalSysPrompt = {
@@ -88,13 +148,18 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
     char = structuredClone(char)
     let varChanged = false
     let stopSending = arg.stopSending ?? false
+    const CharacterlowLevelAccess = char.lowLevelAccess ?? false
+    let sendAIprompt = false
     const currentChat = get(CurrentChat)
     let additonalSysPrompt:additonalSysPrompt = arg.additonalSysPrompt ?? {
         start:'',
         historyend: '',
         promptend: ''
     }
-    const triggers = char.triggerscript.concat(getModuleTriggers())
+    const triggers = char.triggerscript.map((v) => {
+        v.lowLevelAccess = CharacterlowLevelAccess
+        return v
+    }).concat(getModuleTriggers())
     const db = get(DataBase)
     const defaultVariables = parseKeyValue(char.defaultVariables).concat(parseKeyValue(db.templateDefaultVariables))
     let chat = structuredClone(arg.chat ?? char.chats[char.chatPage])
@@ -156,6 +221,12 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     const conditionValue = risuChatParser(condition.value,{chara:char})
                     varValue = risuChatParser(varValue,{chara:char})
                     switch(condition.operator){
+                        case 'true': {
+                            if(varValue !== 'true' && varValue !== '1'){
+                                pass = false
+                            }
+                            break
+                        }
                         case '=':
                             if(varValue !== conditionValue){
                                 pass = false
@@ -269,7 +340,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                     break
                 }
                 case 'runtrigger':{
-                    if(arg.recursiveCount < 10){
+                    if(arg.recursiveCount < 10 || trigger.lowLevelAccess){
                         arg.recursiveCount++
                         const r = await runTrigger(char,'manual',{
                             chat,
@@ -284,6 +355,166 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                             stopSending = r.stopSending
                         }
                     }
+                    break
+                }
+                case 'cutchat':{
+                    const start = Number(risuChatParser(effect.start,{chara:char}))
+                    const end = Number(risuChatParser(effect.end,{chara:char}))
+                    chat.message = chat.message.slice(start,end)
+                    break
+                }
+                case 'modifychat':{
+                    const index = Number(risuChatParser(effect.index,{chara:char}))
+                    const value = risuChatParser(effect.value,{chara:char})
+                    if(chat.message[index]){
+                        chat.message[index].data = value
+                    }
+                    break
+                }
+
+                // low level access only
+                case 'showAlert':{
+                    if(!trigger.lowLevelAccess){
+                        break
+                    }
+
+                    const effectValue = risuChatParser(effect.value,{chara:char})
+                    const inputVar = risuChatParser(effect.inputVar,{chara:char})
+
+                    switch(effect.alertType){
+                        case 'normal':{
+                            alertNormal(effectValue)
+                            break
+                        }
+                        case 'error':{
+                            alertError(effectValue)
+                            break
+                        }
+                        case 'input':{
+                            const val = await alertInput(effectValue)
+                            setVar(inputVar, val)
+                        }
+                        case 'select':{
+                            const val = await alertSelect(effectValue.split('§'))
+                            setVar(inputVar, val)
+                        }
+                    }
+                    break
+                }
+
+                case 'sendAIprompt':{
+                    if(!trigger.lowLevelAccess){
+                        break
+                    }
+                    sendAIprompt = true
+                    break
+                }
+
+                case 'runLLM':{
+                    if(!trigger.lowLevelAccess){
+                        break
+                    }
+                    const effectValue = risuChatParser(effect.value,{chara:char})
+                    const varName = effect.inputVar
+                    let promptbody:OpenAIChat[] = []
+                    let currentRole:'user'|'assistant'|'system'
+                    
+                    const splited = effectValue.split('\n')
+
+                    for(let i = 0; i < splited.length; i++){
+                        const line = splited[i]
+                        if(line.startsWith('@@role ')){
+                            const role = line.split(' ')[1]
+                            switch(role){
+                                case 'user':
+                                case 'assistant':
+                                case 'system':
+                                    currentRole = role
+                                    break
+                                default:
+                                    currentRole = 'system'
+                                    break
+                            }
+                            promptbody.push({role: currentRole, content: ''})
+                            continue
+                        }
+                        else if(promptbody.length === 0){
+                            promptbody.push({role: 'system', content: line})
+                        }
+                        else{
+                            promptbody[promptbody.length - 1].content += line
+                        }
+                    }
+
+                    promptbody = promptbody.map((e) => {
+                        e.content = e.content.trim()
+                        return e
+                    }).filter((e) => e.content.length > 0)
+
+                    const result = await requestChatData({
+                        formated: promptbody,
+                        bias: {},
+                        useStreaming: false,
+                        noMultiGen: true,
+                    }, 'model')
+
+                    if(result.type === 'fail' || result.type === 'streaming' || result.type === 'multiline'){
+                        setVar(varName, 'Error: ' + result.result)
+                    }
+                    else{
+                        setVar(varName, result.result)
+                    }
+
+                    break
+                }
+
+                case 'checkSimilarity':{
+                    if(!trigger.lowLevelAccess){
+                        break
+                    }
+
+                    const processer = new HypaProcesser('MiniLM')
+                    const effectValue = risuChatParser(effect.value,{chara:char})
+                    const source = risuChatParser(effect.source,{chara:char})
+                    await processer.addText(effectValue.split('§'))
+                    const val = await processer.similaritySearch(source)
+                    setVar(effect.inputVar, val.join('§'))
+                    break
+                }
+
+                case 'extractRegex':{
+                    if(!trigger.lowLevelAccess){
+                        break
+                    }
+
+                    const effectValue = risuChatParser(effect.value,{chara:char})
+                    const regex = new RegExp(effect.regex, effect.flags)
+                    const regexResult = regex.exec(effectValue)
+                    const result = effect.result.replace(/\$[0-9]+/g, (match) => {
+                        const index = Number(match.slice(1))
+                        return regexResult[index]
+                    }).replace(/\$&/g, regexResult[0]).replace(/\$\$/g, '$')
+
+                    setVar(effect.inputVar, result)
+                    break
+                }
+
+                case 'runImgGen':{
+                    if(!trigger.lowLevelAccess){
+                        break
+                    }
+
+                    const effectValue = risuChatParser(effect.value,{chara:char})
+                    const negValue = risuChatParser(effect.negValue,{chara:char})
+                    const gen = await generateAIImage(effectValue, char, negValue, 'inlay')
+                    if(!gen){
+                        return ''
+                    }
+                    const imgHTML = new Image()
+                    imgHTML.src = gen
+                    const inlay = await writeInlayImage(imgHTML)
+                    const res = `{{inlay::${inlay}}}`
+                    setVar(effect.inputVar, res)
                     break
                 }
             }
@@ -305,6 +536,6 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
         currentChat.scriptstate = chat.scriptstate
     }
 
-    return {additonalSysPrompt, chat, tokens:caculatedTokens, stopSending}
+    return {additonalSysPrompt, chat, tokens:caculatedTokens, stopSending, sendAIprompt}
 
 }

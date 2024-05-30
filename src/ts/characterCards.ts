@@ -1,12 +1,12 @@
 import { get, writable, type Writable } from "svelte/store"
 import { alertCardExport, alertConfirm, alertError, alertInput, alertMd, alertNormal, alertSelect, alertStore, alertTOS, alertWait } from "./alert"
-import { DataBase, defaultSdDataFunc, type character, setDatabase, type customscript, type loreSettings, type loreBook, type triggerscript } from "./storage/database"
+import { DataBase, defaultSdDataFunc, type character, setDatabase, type customscript, type loreSettings, type loreBook, type triggerscript, importPreset } from "./storage/database"
 import { checkNullish, decryptBuffer, encryptBuffer, isKnownUri, selectFileByDom, selectMultipleFile, sleep } from "./util"
 import { language } from "src/lang"
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, v4 } from 'uuid';
 import { characterFormatUpdate } from "./characters"
 import { AppendableBuffer, checkCharOrder, downloadFile, loadAsset, LocalWriter, openURL, readImage, saveAsset, VirtualWriter } from "./storage/globalApi"
-import { CurrentCharacter, selectedCharID } from "./stores"
+import { CurrentCharacter, SettingsMenuIndex, selectedCharID, settingsOpen } from "./stores"
 import { convertImage, hasher } from "./parser"
 import { CCardLib, type CharacterCardV3, type LorebookEntry } from '@risuai/ccardlib'
 import { reencodeImage } from "./process/files/image"
@@ -241,6 +241,40 @@ export async function characterURLImport() {
     } catch (error) {
         alertError(language.errors.noData)
         return null
+    }
+
+
+    const hash = location.hash
+    if(hash.startsWith('#import_module=')){
+        const data = hash.replace('#import_module=', '')
+        const importData = JSON.parse(Buffer.from(decodeURIComponent(data), 'base64').toString('utf-8'))
+        importData.id = v4()
+
+        const db = get(DataBase)
+        if(importData.lowLevelAccess){
+            const conf = await alertConfirm(language.lowLevelAccessConfirm)
+            if(!conf){
+                return false
+            }
+        }
+        db.modules.push(importData)
+        setDatabase(db)
+        alertNormal(language.successImport)
+        SettingsMenuIndex.set(1)
+        settingsOpen.set(true)
+        return
+    }
+    if(hash.startsWith('#import_preset=')){
+        const data = hash.replace('#import_preset=', '')
+        const importData =Buffer.from(decodeURIComponent(data), 'base64')
+        await importPreset({
+            name: 'imported.risupreset',
+            data: importData
+        })
+        SettingsMenuIndex.set(14)
+        settingsOpen.set(true)
+        return
+    
     }
 }
 
@@ -479,6 +513,12 @@ async function importCharacterCardSpec(card:CharacterCardV2Risu|CharacterCardV3,
         sdData = risuext.sdData ?? sdData
     }
 
+    if(risuext && risuext?.lowLevelAccess){
+        const conf = await alertConfirm(language.lowLevelAccessConfirm)
+        if(!conf){
+            return false
+        }
+    }
     const charbook = data.character_book
     let lorebook:loreBook[] = []
     let loresettings:undefined|loreSettings = undefined
@@ -586,6 +626,7 @@ async function importCharacterCardSpec(card:CharacterCardV2Risu|CharacterCardV3,
         imported: true,
         source: card?.data?.extensions?.risuai?.source ?? [],
         ccAssets: ccAssets,
+        lowLevelAccess: risuext?.lowLevelAccess ?? false
     }
 
     if(card.spec === 'chara_card_v3'){
@@ -841,30 +882,34 @@ export function createBaseV3(char:character){
         ext: string
     }> = structuredClone(char.ccAssets ?? [])
 
-    for(const asset of char.additionalAssets){
-        assets.push({
-            type: 'x-risu-asset',
-            uri: asset[1],
-            name: asset[0],
-            ext: asset[2] || 'unknown'
-        })
+    if(char.additionalAssets){
+        for(const asset of char.additionalAssets){
+            assets.push({
+                type: 'x-risu-asset',
+                uri: asset[1],
+                name: asset[0],
+                ext: asset[2] || 'unknown'
+            })
+        }
     }
 
-    for(const asset of char.emotionImages){
+    if(char.emotionImages){
+        for(const asset of char.emotionImages){
+            assets.push({
+                type: 'emotion',
+                uri: asset[1],
+                name: asset[0],
+                ext: 'unknown'
+            })
+        }
+    
         assets.push({
-            type: 'emotion',
-            uri: asset[1],
-            name: asset[0],
-            ext: 'unknown'
+            type: 'icon',
+            uri: 'ccdefault:',
+            name: 'main',
+            ext: 'png'
         })
     }
-
-    assets.push({
-        type: 'icon',
-        uri: 'ccdefault:',
-        name: 'main',
-        ext: 'png'
-    })
 
     for(const lore of char.globalLore){
         let ext:{
@@ -939,7 +984,8 @@ export function createBaseV3(char:character){
                     lorePlus: char.lorePlus,
                     inlayViewScreen: char.inlayViewScreen,
                     newGenData: char.newGenData,
-                    vits: {}
+                    vits: {},
+                    lowLevelAccess: char.lowLevelAccess ?? false
                 },
                 depth_prompt: char.depth_prompt
             },
