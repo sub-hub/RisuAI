@@ -1,7 +1,7 @@
 import { get } from "svelte/store"
 import { translatorPlugin } from "../plugins/plugins"
 import { DataBase, type character, type customscript, type groupChat } from "../storage/database"
-import { globalFetch } from "../storage/globalApi"
+import { globalFetch, isTauri } from "../storage/globalApi"
 import { alertError } from "../alert"
 import { requestChatData } from "../process/request"
 import { doingChat } from "../process"
@@ -10,6 +10,7 @@ import { selectedCharID } from "../stores"
 import { getModuleRegexScripts } from "../process/modules"
 import { getNodetextToSentence, sleep, applyMarkdownToNode } from "../util"
 import { processScriptFull } from "../process/scripts"
+import { Capacitor } from "@capacitor/core"
 
 let cache={
     origin: [''],
@@ -238,7 +239,7 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
             return html
         }
     }
-    if(db.translatorType === 'llm'){
+    if(db.translatorType === 'llm' && (!(isTauri || Capacitor.isNativePlatform()))){
         const tr = db.translator || 'en'
         return translateLLM(html, {to: tr})
     }
@@ -425,8 +426,8 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
     // Serialize the DOM back to HTML
     const serializer = new XMLSerializer();
     let translatedHTML = serializer.serializeToString(dom);
-    // Remove the outer <body> tags
-    translatedHTML = translatedHTML.replace(/^<body[^>]*>|<\/body>$/g, '');
+    // Remove the outer <html|body|head> tags
+    translatedHTML = translatedHTML.replace(/<\/?(html|body|head)[^>]*>/g, '');
 
     if(charArg !== ''){
         let scripts:customscript[] = []
@@ -473,7 +474,7 @@ async function translateLLM(text:string, arg:{to:string}){
         bias: {},
         useStreaming: false,
         noMultiGen: true,
-        maxTokens: 1000,
+        maxTokens: db.translatorMaxResponse,
     }, 'submodel')
 
     if(rq.type === 'fail' || rq.type === 'streaming' || rq.type === 'multiline'){

@@ -504,6 +504,7 @@ export const languageEnglish = {
     imgGenInstructions: "Image Generation Instructions",
     usePlainFetchWarn: "Please disable this option when using NovelAI, as it can cause CORS errors when using NovelAI.",
     translationPrompt: "Translation Prompt",
+    translationResponseSize: "Translation Response Size",
     webdeeplwarn: "This option is not recommended for use with web version, as it can cause CORS errors.",
     saveBackupLocal: "Save Backup Locally",
     loadBackupLocal: "Load Backup Locally",
@@ -645,4 +646,7 @@ export const languageEnglish = {
     end: "End",
     index: "Index",
     search: "Search",
+    goCharacterOnImport: "Go to Character on Realm Import",
+    format: "Format",
+    v2Warning: "Warning: V2 card is no longer supported. it may not contain all the data.",
 }

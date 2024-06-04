@@ -472,6 +472,7 @@ export const languageChineseTraditional = {
     "imgGenInstructions": "圖像產生指令",
     "usePlainFetchWarn": "請在使用NovelAI時禁用此選項，因為它可能導致CORS錯誤。",
     "translationPrompt": "翻譯提示",
+    "translationResponseSize": "翻譯響應大小",
     "webdeeplwarn": "此選項不推薦在網頁版本中使用，因為它可能導致CORS錯誤。",
     "saveBackupLocal": "本地保存備份",
     "loadBackupLocal": "本地載入備份",
@@ -566,5 +567,6 @@ export const languageChineseTraditional = {
     "syntax": "Syntax（語法）",
     "run": "執行",
     "noMessage": "輸入一些文字開始聊天。",
-    "combineTranslation": "合併翻譯"
+    "combineTranslation": "合併翻譯",
+    "v2Warning": "警告：V2 不再受支援。它可能不包含所有數據。"
   }

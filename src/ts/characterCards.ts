@@ -5,19 +5,20 @@ import { checkNullish, decryptBuffer, encryptBuffer, isKnownUri, selectFileByDom
 import { language } from "src/lang"
 import { v4 as uuidv4, v4 } from 'uuid';
 import { characterFormatUpdate } from "./characters"
-import { AppendableBuffer, checkCharOrder, downloadFile, loadAsset, LocalWriter, openURL, readImage, saveAsset, VirtualWriter } from "./storage/globalApi"
-import { CurrentCharacter, SettingsMenuIndex, selectedCharID, settingsOpen } from "./stores"
+import { AppendableBuffer, BlankWriter, checkCharOrder, downloadFile, loadAsset, LocalWriter, openURL, readImage, saveAsset, VirtualWriter } from "./storage/globalApi"
+import { CurrentCharacter, SettingsMenuIndex, ShowRealmFrameStore, selectedCharID, settingsOpen } from "./stores"
 import { convertImage, hasher } from "./parser"
 import { CCardLib, type CharacterCardV3, type LorebookEntry } from '@risuai/ccardlib'
 import { reencodeImage } from "./process/files/image"
 import { PngChunk } from "./pngChunk"
 import type { OnnxModelFiles } from "./process/transformers"
+import { CharXReader, CharXWriter } from "./process/processzip"
 
 export const hubURL = "https://sv.risuai.xyz"
 
 export async function importCharacter() {
     try {
-        const files = await selectFileByDom(['png', 'json'], 'multiple')
+        const files = await selectFileByDom(["*"], 'multiple')
         if(!files){
             return
         }
@@ -62,6 +63,38 @@ async function importCharacterProcess(f:{
             return
         }
     }
+
+    if(f.name.endsWith('charx')){
+        console.log('reading charx')
+        alertStore.set({
+            type: 'wait',
+            msg: 'Loading... (Reading)'
+        })
+        const reader = new CharXReader()
+        await reader.read(f.data, {
+            alertInfo: true
+        })
+        const cardData = reader.cardData
+        if(!cardData){
+            alertError(language.errors.noData)
+            return
+        }
+        const card = JSON.parse(cardData)
+        if(CCardLib.character.check(card) !== 'v3'){
+            alertError(language.errors.noData)
+            return
+        }
+        await importCharacterCardSpec(card, undefined, 'normal', reader.assets)
+        let db = get(DataBase)
+        return db.characters.length - 1
+    }
+
+    if(!f.name.endsWith('png')){
+        alertError(language.errors.noData)
+        return
+    }
+    
+
     alertStore.set({
         type: 'wait',
         msg: 'Loading... (Reading)'
@@ -176,6 +209,11 @@ async function importCharacterProcess(f:{
     }
     else {
         const parsed = JSON.parse(Buffer.from(readedChara, 'base64').toString('utf-8'))
+        //fix readedChara version pointing number instead of string because of previous version
+        if(typeof (parsed as CharacterCardV2Risu)?.data?.character_version === 'number'){
+            (parsed as CharacterCardV2Risu).data.character_version = (parsed as CharacterCardV2Risu).data.character_version.toString()
+        }
+
         const checkedVersion = CCardLib.character.check(parsed)
         if(checkedVersion === 'v2' || checkedVersion === 'v3'){
             if(await importCharacterCardSpec(parsed, img, "normal", assets)){
@@ -183,8 +221,19 @@ async function importCharacterProcess(f:{
                 return db.characters.length - 1
             }
         }
+        if(checkedVersion === 'v1'){
+            const converted = CCardLib.character.convert(parsed, {
+                from: 'v1',
+                to: 'v2'
+            })
+            if(await importCharacterCardSpec(converted, img, "normal", assets)){
+                let db = get(DataBase)
+                return db.characters.length - 1
+            }
+        }
     }
     const charaData:OldTavernChar = JSON.parse(Buffer.from(readedChara, 'base64').toString('utf-8'))
+    console.log(charaData)
     const imgp = await saveAsset(await reencodeImage(img))
     let db = get(DataBase)
     db.characters.push(convertOldTavernAndJSON(charaData, imgp))
@@ -193,22 +242,26 @@ async function importCharacterProcess(f:{
     return db.characters.length - 1
 }
 
+export const getRealmInfo = async (realmPath:string) => {
+    const url = new URL(location.href);
+    url.searchParams.delete('realm');
+    window.history.pushState(null, '', url.toString());
+
+    const res = await fetch(`${hubURL}/hub/info/${realmPath}`)
+    if(res.status !== 200){
+        alertError(await res.text())
+        return
+    }
+    showRealmInfoStore.set(await res.json())
+}
+
 export const showRealmInfoStore:Writable<null|hubType> = writable(null)
 
 export async function characterURLImport() {
     const realmPath = (new URLSearchParams(location.search)).get('realm')
     try {
         if(realmPath){
-            const url = new URL(location.href);
-            url.searchParams.delete('realm');
-            window.history.pushState(null, '', url.toString());
-
-            const res = await fetch(`${hubURL}/hub/info/${realmPath}`)
-            if(res.status !== 200){
-                alertError(await res.text())
-                return
-            }
-            showRealmInfoStore.set(await res.json())
+           getRealmInfo(realmPath)
         }
     } catch (error) {
         
@@ -335,10 +388,13 @@ export async function exportChar(charaID:number):Promise<string> {
 
     const option = await alertCardExport()
     if(option.type === ''){
-        exportCharacterCard(char,'png', {spec: 'v3'})
+        exportCharacterCard(char, option.type2 === 'json' ? 'json' : (option.type2 === 'charx' ? 'charx' : 'png'), {spec: 'v3'})
     }
     else if(option.type === 'ccv2'){
         exportCharacterCard(char,'png', {spec: 'v2'})
+    }
+    else if(option.type === 'realm'){
+        ShowRealmFrameStore.set("character")
     }
     else{
         return option.type
@@ -482,6 +538,24 @@ async function importCharacterCardSpec(card:CharacterCardV2Risu|CharacterCardV3,
                 else if(data.assets[i].uri === 'ccdefault:'){
                     imgp = im
                 }
+                else if(data.assets[i].uri.startsWith('embeded://')){
+                    const key = data.assets[i].uri.replace('embeded://', '')
+                    imgp = assetDict[key]
+                    if(!imgp){
+                        throw new Error('Error while importing, asset ' + key + ' not found')
+                    }
+                }
+                else if(data.assets[i].uri.startsWith('data:')){
+                    //data uri
+                    const b64 = data.assets[i].uri.split(',')[1]
+                    if(b64.length < 50 * 1024 * 1024){
+                        imgp = await saveAsset(Buffer.from(b64, 'base64'))
+                    }
+                    else{
+                        alertError('Data URI too large')
+                        continue
+                    }
+                }
                 else{
                     continue
                 }
@@ -506,11 +580,13 @@ async function importCharacterCardSpec(card:CharacterCardV2Risu|CharacterCardV3,
             }
         }
 
-        bias = risuext.bias ?? bias
-        viewScreen = risuext.viewScreen ?? viewScreen
-        customScripts = risuext.customScripts ?? customScripts
-        utilityBot = risuext.utilityBot ?? utilityBot
-        sdData = risuext.sdData ?? sdData
+        if(risuext){
+            bias = risuext.bias ?? bias
+            viewScreen = risuext.viewScreen ?? viewScreen
+            customScripts = risuext.customScripts ?? customScripts
+            utilityBot = risuext.utilityBot ?? utilityBot
+            sdData = risuext.sdData ?? sdData
+        }
     }
 
     if(risuext && risuext?.lowLevelAccess){
@@ -710,13 +786,13 @@ async function createBaseV2(char:character) {
             character_version: `${char.additionalData?.character_version}` ?? '',
             extensions: {
                 risuai: {
-                    emotions: char.emotionImages,
+                    // emotions: char.emotionImages,
                     bias: char.bias,
                     viewScreen: char.viewScreen,
                     customScripts: char.customscript,
                     utilityBot: char.utilityBot,
                     sdData: char.sdData,
-                    additionalAssets: char.additionalAssets,
+                    // additionalAssets: char.additionalAssets,
                     backgroundHTML: char.backgroundHTML,
                     license: char.license,
                     triggerscript: char.triggerscript,
@@ -745,7 +821,7 @@ async function createBaseV2(char:character) {
 }
 
 
-export async function exportCharacterCard(char:character, type:'png'|'json' = 'png', arg:{
+export async function exportCharacterCard(char:character, type:'png'|'json'|'charx' = 'png', arg:{
     password?:string
     writer?:LocalWriter|VirtualWriter,
     spec?:'v2'|'v3'
@@ -756,10 +832,17 @@ export async function exportCharacterCard(char:character, type:'png'|'json' = 'p
         char.image = ''
         img = await reencodeImage(img)
         const localWriter = arg.writer ?? (new LocalWriter())
-        if(!arg.writer){
-            await (localWriter as LocalWriter).init(`Image file`, ['png'])
+        if(!arg.writer && type !== 'json'){
+            const nameExt = {
+                'png': ['Image File', 'png'],
+                'json': ['JSON File', 'json'],
+                'charx': ['CharX File', 'charx']
+            }
+            const ext = nameExt[type]
+            console.log(ext)
+            await (localWriter as LocalWriter).init(ext[0], [ext[1]])
         }
-        const writer = new PngChunk.streamWriter(img, localWriter)
+        const writer = type === 'charx' ? (new CharXWriter(localWriter)) : type === 'json' ? (new BlankWriter()) : (new PngChunk.streamWriter(img, localWriter))
         await writer.init()
         let assetIndex = 0
         if(spec === 'v2'){
@@ -832,15 +915,55 @@ export async function exportCharacterCard(char:character, type:'png'|'json' = 'p
                         type: 'wait',
                         msg: `Loading... (Adding Assets ${i} / ${card.data.assets.length})`
                     })
-                    const key = card.data.assets[i].uri
-                    if(isKnownUri(key)){
+                    let key = card.data.assets[i].uri
+                    let rData:Uint8Array
+                    if(key === 'ccdefault:' && type !== 'png'){
+                        key = char.image
+                        rData = img
+                    }
+                    else if(isKnownUri(key)){
                         continue
                     }
-                    const rData = await readImage(key)
-                    const b64encoded = Buffer.from(await convertImage(rData)).toString('base64')
+                    else{
+                        rData = await readImage(key)
+                    }
                     assetIndex++
-                    card.data.assets[i].uri = `__asset:${assetIndex}`
-                    await writer.write("chara-ext-asset_" + assetIndex, b64encoded)
+                    if(type === 'png'){
+                        const b64encoded = Buffer.from(await convertImage(rData)).toString('base64')
+                        card.data.assets[i].uri = `__asset:${assetIndex}`
+                        await writer.write("chara-ext-asset_" + assetIndex, b64encoded)
+                    }
+                    else if(type === 'json'){
+                        const b64encoded = Buffer.from(await convertImage(rData)).toString('base64')
+                        card.data.assets[i].uri = `data:application/octet-stream;base64,${b64encoded}`
+                    }
+                    else{
+                        let type = 'other'
+                        switch(card.data.assets[i].type){
+                            case 'emotion':
+                                type = 'emotion'
+                                break
+                            case 'background':
+                                type = 'background'
+                                break
+                            case 'user_icon':
+                                type = 'user_icon'
+                                break
+                            case 'icon':
+                                type = 'icon'
+                                break
+                        }
+                        let path = ''
+                        const name = `${assetIndex}`
+                        if(card.data.assets[i].ext === 'unknown'){
+                            path = `assets/${type}/${name}.png`
+                        }
+                        else{
+                            path = `assets/${type}/${name}.${card.data.assets[i].ext}`
+                        }
+                        card.data.assets[i].uri = 'embeded://' + path
+                        await writer.write(path, rData)
+                    }
                 }
             }
             if(type === 'json'){
@@ -855,7 +978,12 @@ export async function exportCharacterCard(char:character, type:'png'|'json' = 'p
                 msg: 'Loading... (Writing)'
             })
     
-            await writer.write("ccv3", Buffer.from(JSON.stringify(card)).toString('base64'))     
+            if(type === 'charx'){
+                await writer.write("card.json", Buffer.from(JSON.stringify(card, null, 4)))
+            }
+            else{
+                await writer.write("ccv3", Buffer.from(JSON.stringify(card)).toString('base64'))
+            }
         }
         await writer.end()
 
@@ -1097,6 +1225,8 @@ export type hubType = {
     hot:number
     license:string
     authorname?:string
+    original?:string
+    type:string
 }
 
 export async function getRisuHub(arg:{
@@ -1144,6 +1274,12 @@ export async function downloadRisuHub(id:string) {
                 data: res.body
             })
             checkCharOrder()
+            let db = get(DataBase)
+            if(db.characters[db.characters.length-1] && db.goCharacterOnImport){
+                const index = db.characters.length-1
+                characterFormatUpdate(index);
+                selectedCharID.set(index);
+            }   
             return
         }
     
@@ -1154,7 +1290,7 @@ export async function downloadRisuHub(id:string) {
         await importCharacterCardSpec(data, await getHubResources(img), 'hub')
         checkCharOrder()
         let db = get(DataBase)
-        if(db.characters[db.characters.length-1]){
+        if(db.characters[db.characters.length-1] && db.goCharacterOnImport){
             const index = db.characters.length-1
             characterFormatUpdate(index);
             selectedCharID.set(index);

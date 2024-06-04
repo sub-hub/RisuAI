@@ -14,7 +14,7 @@ import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "1.110.1"
+export let appVer = "1.111.4"
 export let webAppSubVer = ''
 
 export function setDatabase(data:Database){
@@ -92,6 +92,9 @@ export function setDatabase(data:Database){
     }
     if(checkNullish(data.translator)){
         data.translator = ''
+    }
+    if(checkNullish(data.translatorMaxResponse)){
+        data.translatorMaxResponse = 1000
     }
     if(checkNullish(data.currentPluginProvider)){
         data.currentPluginProvider = ''
@@ -406,6 +409,7 @@ export function setDatabase(data:Database){
     data.templateDefaultVariables ??= ''
     data.hypaAllocatedTokens ??= 3000
     data.hypaChunkSize ??= 3000
+    data.dallEQuality ??= 'standard'
 
     changeLanguage(data.language)
     DataBase.set(data)
@@ -610,6 +614,7 @@ export interface Database{
     huggingfaceKey:string
     allowAllExtentionFiles?:boolean
     translatorPrompt:string
+    translatorMaxResponse:number
     top_p: number,
     google: {
         accessToken: string
@@ -669,6 +674,8 @@ export interface Database{
     hypaAllocatedTokens:number
     hypaChunkSize:number
     cohereAPIKey:string
+    goCharacterOnImport:boolean
+    dallEQuality:string
 }
 
 export interface customscript{
@@ -1099,7 +1106,6 @@ export const presetTemplate:botPreset = {
     },
     top_p: 1,
     useInstructPrompt: false,
-
 }
 
 const defaultSdData:[string,string][] = [
@@ -1163,7 +1169,7 @@ export function saveCurrentPreset(){
         openrouterProvider: db.openrouterProvider,
         useInstructPrompt: db.useInstructPrompt,
         customPromptTemplateToggle: db.customPromptTemplateToggle ?? "",
-        templateDefaultVariables: db.templateDefaultVariables ?? ""
+        templateDefaultVariables: db.templateDefaultVariables ?? "",
     }
     db.botPresets = pres
     setDatabase(db)
