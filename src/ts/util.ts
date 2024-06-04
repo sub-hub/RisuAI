@@ -603,7 +603,7 @@ export function applyMarkdownToNode(node: Node) {
                         // for(let i=0;i<parentStyle.length;i++){
                         //     childElement.style.setProperty(parentStyle[i], parentStyle.getPropertyValue(parentStyle[i]))
                         // }
-                        childElement.style.fontFamily = parentStyle.fontFamily;
+                        childElement.style.fontFamily = 'ridibatang'
                         childElement.style.lineHeight = parentStyle.lineHeight;
                     }
                 }
