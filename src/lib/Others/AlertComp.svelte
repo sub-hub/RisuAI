@@ -20,8 +20,8 @@
     import TextAreaInput from "../UI/GUI/TextAreaInput.svelte";
     let btn
     let input = ''
-    let cardExportType = ''
-    let cardExportPassword = ''
+    let cardExportType = 'realm'
+    let cardExportType2 = ''
     let cardLicense = ''
     let generationInfoMenuIndex = 0
     $: {
@@ -32,8 +32,8 @@
             input = ''
         }
         if($alertStore.type !== 'cardexport'){
-            cardExportType = ''
-            cardExportPassword = ''
+            cardExportType = 'realm'
+            cardExportType2 = ''
             cardLicense = ''
         }
     }
@@ -383,8 +383,7 @@
                         type: 'none',
                         msg: JSON.stringify({
                             type: 'cancel',
-                            password: cardExportPassword,
-                            license: cardLicense
+                            type2: cardExportType2
                         })
                     })
                 }}>
@@ -404,29 +403,38 @@
                 <span class="text-textcolor2 text-sm">{language.jsonDesc}</span>
             {:else if cardExportType === 'ccv2'}
                 <span class="text-textcolor2 text-sm">{language.ccv2Desc}</span>
+                <span class="text-red-500 text-sm">{language.v2Warning}</span>
             {:else}
                 <span class="text-textcolor2 text-sm">{language.realmDesc}</span>
             {/if}
             <div class="flex items-center flex-wrap mt-2">
                 {#if $alertStore.submsg === 'preset'}
-                    <button class="bg-bgcolor px-2 py-4 rounded-lg flex-1" class:ring-1={cardExportType === ''} on:click={() => {cardExportType = ''}}>Risupreset</button>
+                    <button class="bg-bgcolor px-2 py-4 rounded-lg flex-1" class:ring-1={cardExportType === 'realm'} on:click={() => {cardExportType = 'realm'}}>RisuRealm</button>
+                    <button class="bg-bgcolor px-2 py-4 rounded-lg ml-2 flex-1" class:ring-1={cardExportType === ''} on:click={() => {cardExportType = ''}}>Risupreset</button>
                     <button class="bg-bgcolor px-2 py-4 rounded-lg ml-2 flex-1" class:ring-1={cardExportType === 'json'} on:click={() => {cardExportType = 'json'}}>JSON</button>
-                    <button class="bg-bgcolor px-2 py-4 rounded-lg ml-2 flex-1" class:ring-1={cardExportType === 'realm'} on:click={() => {cardExportType = 'realm'}}>RisuRealm</button>
                 {:else if $alertStore.submsg === 'module'}
-                    <button class="bg-bgcolor px-2 py-4 rounded-lg flex-1" class:ring-1={cardExportType === ''} on:click={() => {cardExportType = ''}}>JSON</button>
                     <button class="bg-bgcolor px-2 py-4 rounded-lg ml-2 flex-1" class:ring-1={cardExportType === 'realm'} on:click={() => {cardExportType = 'realm'}}>RisuRealm</button>
+                    <button class="bg-bgcolor px-2 py-4 rounded-lg flex-1" class:ring-1={cardExportType === ''} on:click={() => {cardExportType = ''}}>JSON</button>
                 {:else}
-                    <button class="bg-bgcolor px-2 py-4 rounded-lg flex-1" class:ring-1={cardExportType === ''} on:click={() => {cardExportType = ''}}>Character Card V3</button>
-                    <button class="bg-bgcolor px-2 py-4 rounded-lg flex-1 ml-2" class:ring-1={cardExportType === 'ccv2'} on:click={() => {cardExportType = 'ccv2'}}>Character Card V2</button>
+                    <button class="bg-bgcolor px-2 py-4 rounded-lg flex-1" class:ring-1={cardExportType === 'realm'} on:click={() => {cardExportType = 'realm'}}>RisuRealm</button>
+                    <button class="bg-bgcolor px-2 py-4 rounded-lg ml-2 flex-1" class:ring-1={cardExportType === ''} on:click={() => {cardExportType = ''}}>Character Card V3</button>
+                    <button class="bg-bgcolor px-2 py-4 rounded-lg ml-2 flex-1" class:ring-1={cardExportType === 'ccv2'} on:click={() => {cardExportType = 'ccv2'}}>Character Card V2</button>
                 {/if}
             </div>
+            {#if $alertStore.submsg === '' && cardExportType === ''}
+                <span class="text-textcolor mt-4">{language.format}</span>
+                <SelectInput bind:value={cardExportType2} className="mt-2">
+                    <OptionInput value="">PNG</OptionInput>
+                    <OptionInput value="json">JSON</OptionInput>
+                    <OptionInput value="charx">CHARX</OptionInput>
+                </SelectInput>
+            {/if}
             <Button className="mt-4" on:click={() => {
                 alertStore.set({
                     type: 'none',
                     msg: JSON.stringify({
                         type: cardExportType,
-                        password: cardExportPassword,
-                        license: cardLicense
+                        type2: cardExportType2
                     })
                 })
             }}>{cardExportType === 'realm' ? language.shareCloud : language.export}</Button>

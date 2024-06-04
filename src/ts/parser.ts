@@ -1023,6 +1023,18 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 case 'date_time_format':{
                     return dateTimeFormat(arra[1])
                 }
+                case 'module_enabled':{
+                    const selchar = db.characters[get(selectedCharID)]
+                    let enabledChatModules:string[] = []
+                    if(!selchar){
+                        enabledChatModules = selchar.chats[selchar.chatPage].modules ?? []
+
+                    }
+                    const moduleId = db.modules.find((f) => {
+                        return f.name === arra[1]
+                    }).id
+                    return (db.enabledModules.includes(moduleId) || enabledChatModules.includes(moduleId)) ? '1' : '0'
+                }
             }
         }
         if(p1.startsWith('random')){
@@ -1061,7 +1073,8 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 return arr[randomIndex]?.replace(/§X/g, ',') ?? ''
             }
         }
-        if(p1.startsWith('roll')){
+        if(p1.startsWith('roll:') || p1.startsWith('rollp:')){
+            const p = p1.startsWith('rollp:')
             const arr = p1.split(/\:|\ /g)
             let ina = arr.at(-1)
     
@@ -1072,6 +1085,11 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
             const maxRoll = parseInt(ina)
             if(isNaN(maxRoll)){
                 return 'NaN'
+            }
+            if(p){
+                const selchar = db.characters[get(selectedCharID)]
+                const rand = sfc32(uuidtoNumber(selchar.chaId), chatID, uuidtoNumber(selchar.chaId), chatID)
+                return (Math.floor(rand() * maxRoll) + 1).toString()
             }
             return (Math.floor(Math.random() * maxRoll) + 1).toString()
         }
