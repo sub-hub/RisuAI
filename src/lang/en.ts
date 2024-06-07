@@ -651,4 +651,6 @@ export const languageEnglish = {
     v2Warning: "Warning: V2 card is no longer supported. it may not contain all the data.",
     applyModule: "Apply Module",
     successApplyModule: "Module is successfully applied",
+    font: "Font",
+    lineHeight: "Line Height",
 }

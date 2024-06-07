@@ -2,7 +2,7 @@
     import type { customscript } from "src/ts/storage/database";
     import RegexData from "./RegexData.svelte";
     import Sortable from "sortablejs";
-    import { sleep } from "src/ts/util";
+    import { sleep, sortableOptions } from "src/ts/util";
     import { onDestroy, onMount } from "svelte";
     export let value:customscript[] = []
     let stb: Sortable = null
@@ -21,32 +21,39 @@
                     newValue.push(value[i])
                 })
                 value = newValue
-                stb.destroy()
+                try {
+                    stb.destroy()
+                } catch (error) {}
                 sorted += 1
                 await sleep(1)
                 createStb()
-            }
+            },
+            ...sortableOptions
         })
     }
 
     const onOpen = () => {
         opened += 1
         if(stb){
-            stb.destroy()
+            try {
+                stb.destroy()
+            } catch (error) {}
         }
     }
     const onClose = () => {
         opened -= 1
-        // if(opened === 0){
-        //     createStb()
-        // }
+        if(opened === 0){
+            createStb()
+        }
     }
 
-    // onMount(createStb)
+    onMount(createStb)
 
     onDestroy(() => {
         if(stb){
-            stb.destroy()
+            try {
+                stb.destroy()
+            } catch (error) {}
         }
     })
 </script>

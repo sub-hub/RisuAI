@@ -12,6 +12,7 @@
     import { DownloadIcon, FolderUpIcon } from "lucide-svelte";
 
     import { guiSizeText, updateGuisize } from "src/ts/gui/guisize";
+  import TextInput from "src/lib/UI/GUI/TextInput.svelte";
 
     const onSchemeInputChange = (e:Event) => {
         changeColorScheme((e.target as HTMLInputElement).value)
@@ -127,11 +128,34 @@
         <input type="color" class="style2 text-sm" bind:value={$DataBase.customTextTheme.FontColorItalicBold} on:change={updateTextTheme}>
         <span class="ml-2">Italic Bold Text</span>
     </div>
+    <div class="flex items-center mt-2">
+        <input type="color" class="style2 text-sm" bind:value={$DataBase.customTextTheme.FontColorQuote1} on:change={updateTextTheme}>
+        <span class="ml-2">Single Quote Text</span>
+    </div>
+    <div class="flex items-center mt-2">
+        <input type="color" class="style2 text-sm" bind:value={$DataBase.customTextTheme.FontColorQuote2} on:change={updateTextTheme}>
+        <span class="ml-2">Double Quote Text</span>
+    </div>
+{/if}
+
+<span class="text-textcolor mt-4">{language.font}</span>
+<SelectInput className="mt-2" bind:value={$DataBase.font} on:change={updateTextTheme}>
+    <OptionInput value="default" >Default</OptionInput>
+    <OptionInput value="timesnewroman" >Times New Roman</OptionInput>
+    <OptionInput value="custom" >Custom</OptionInput>
+</SelectInput>
+
+{#if $DataBase.font === "custom"}
+    <TextInput bind:value={$DataBase.customFont} on:change={updateTextTheme} />
 {/if}
 
 <span class="text-textcolor mt-4">{language.UISize}</span>
 <SliderInput  min={50} max={200} bind:value={$DataBase.zoomsize} />
 <span class="text-textcolor2 mb-6 text-sm">{($DataBase.zoomsize)}%</span>
+
+<span class="text-textcolor mt-4">{language.lineHeight}</span>
+<SliderInput  min={0.5} max={3} step={0.05} bind:value={$DataBase.lineHeight} />
+<span class="text-textcolor2 mb-6 text-sm">{($DataBase.lineHeight)}</span>
 
 <span class="text-textcolor">{language.iconSize}</span>
 <SliderInput min={50} max={200} bind:value={$DataBase.iconsize} />

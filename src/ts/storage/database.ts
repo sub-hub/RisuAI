@@ -14,7 +14,7 @@ import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "1.111.7"
+export let appVer = "1.113.1"
 export let webAppSubVer = ''
 
 export function setDatabase(data:Database){
@@ -270,7 +270,9 @@ export function setDatabase(data:Database){
             FontColorStandard: "#f8f8f2",
             FontColorBold: "#f8f8f2",
             FontColorItalic: "#8C8D93",
-            FontColorItalicBold: "#8C8D93"
+            FontColorItalicBold: "#8C8D93",
+            FontColorQuote1: '#8BE9FD',
+            FontColorQuote2: '#FFB86C'
         }
     }
     if(checkNullish(data.hordeConfig)){
@@ -410,7 +412,11 @@ export function setDatabase(data:Database){
     data.hypaAllocatedTokens ??= 3000
     data.hypaChunkSize ??= 3000
     data.dallEQuality ??= 'standard'
-
+    data.customTextTheme.FontColorQuote1 ??= '#8BE9FD'
+    data.customTextTheme.FontColorQuote2 ??= '#FFB86C'
+    data.font ??= 'default'
+    data.customFont ??= ''
+    data.lineHeight ??= 1.25
     changeLanguage(data.language)
     DataBase.set(data)
 }
@@ -501,6 +507,8 @@ export interface Database{
         FontColorBold : string,
         FontColorItalic : string,
         FontColorItalicBold : string,
+        FontColorQuote1 : string,
+        FontColorQuote2 : string
     }
     requestRetrys:number
     emotionPrompt2:string
@@ -676,6 +684,9 @@ export interface Database{
     cohereAPIKey:string
     goCharacterOnImport:boolean
     dallEQuality:string
+    font: string
+    customFont: string
+    lineHeight: number
 }
 
 export interface customscript{
