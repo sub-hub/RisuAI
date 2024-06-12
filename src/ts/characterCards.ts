@@ -1,11 +1,11 @@
 import { get, writable, type Writable } from "svelte/store"
 import { alertCardExport, alertConfirm, alertError, alertInput, alertMd, alertNormal, alertSelect, alertStore, alertTOS, alertWait } from "./alert"
-import { DataBase, defaultSdDataFunc, type character, setDatabase, type customscript, type loreSettings, type loreBook, type triggerscript, importPreset } from "./storage/database"
+import { DataBase, defaultSdDataFunc, type character, setDatabase, type customscript, type loreSettings, type loreBook, type triggerscript, importPreset, type groupChat } from "./storage/database"
 import { checkNullish, decryptBuffer, encryptBuffer, isKnownUri, selectFileByDom, selectMultipleFile, sleep } from "./util"
 import { language } from "src/lang"
 import { v4 as uuidv4, v4 } from 'uuid';
 import { characterFormatUpdate } from "./characters"
-import { AppendableBuffer, BlankWriter, checkCharOrder, downloadFile, loadAsset, LocalWriter, openURL, readImage, saveAsset, VirtualWriter } from "./storage/globalApi"
+import { AppendableBuffer, BlankWriter, checkCharOrder, downloadFile, isNodeServer, isTauri, loadAsset, LocalWriter, openURL, readImage, saveAsset, VirtualWriter } from "./storage/globalApi"
 import { CurrentCharacter, SettingsMenuIndex, ShowRealmFrameStore, selectedCharID, settingsOpen } from "./stores"
 import { convertImage, hasher } from "./parser"
 import { CCardLib, type CharacterCardV3, type LorebookEntry } from '@risuai/ccardlib'
@@ -13,6 +13,7 @@ import { reencodeImage } from "./process/files/image"
 import { PngChunk } from "./pngChunk"
 import type { OnnxModelFiles } from "./process/transformers"
 import { CharXReader, CharXWriter } from "./process/processzip"
+import { Capacitor } from "@capacitor/core"
 
 export const hubURL = "https://sv.risuai.xyz"
 
@@ -939,6 +940,7 @@ export async function exportCharacterCard(char:character, type:'png'|'json'|'cha
                     }
                     else{
                         let type = 'other'
+                        let itype = 'other'
                         switch(card.data.assets[i].type){
                             case 'emotion':
                                 type = 'emotion'
@@ -953,13 +955,56 @@ export async function exportCharacterCard(char:character, type:'png'|'json'|'cha
                                 type = 'icon'
                                 break
                         }
+                        switch(card.data.assets[i].ext){
+                            case 'png':
+                            case 'jpg':
+                            case 'jpeg':
+                            case 'gif':
+                            case 'webp':
+                            case 'avif':
+                                itype = 'image'
+                                break
+                            case 'mp3':
+                            case 'wav':
+                            case 'ogg':
+                            case 'flac':
+                                itype = 'audio'
+                                break
+                            case 'mp4':
+                            case 'webm':
+                            case 'mov':
+                            case 'avi':
+                            case 'mkv':
+                                itype = 'video'
+                                break
+                            case 'mmd':
+                            case 'obj':
+                                itype = 'model'
+                                break
+                            case 'safetensors':
+                            case 'cpkt':
+                            case 'onnx':
+                                itype = 'ai'
+                                break
+                            case 'otf':
+                            case 'ttf':
+                            case 'woff':
+                            case 'woff2':
+                                itype = 'fonts'
+                                break
+                            case 'js':
+                            case 'ts':
+                            case 'lua':
+                                itype = 'code'
+                        }
+
                         let path = ''
                         const name = `${assetIndex}`
                         if(card.data.assets[i].ext === 'unknown'){
-                            path = `assets/${type}/${name}.png`
+                            path = `assets/${type}/image/${name}.png`
                         }
                         else{
-                            path = `assets/${type}/${name}.${card.data.assets[i].ext}`
+                            path = `assets/${type}/${itype}/${name}.${card.data.assets[i].ext}`
                         }
                         card.data.assets[i].uri = 'embeded://' + path
                         await writer.write(path, rData)
@@ -1229,6 +1274,8 @@ export type hubType = {
     type:string
 }
 
+export let hubAdditionalHTML = ''
+
 export async function getRisuHub(arg:{
     search:string,
     page:number,
@@ -1237,13 +1284,18 @@ export async function getRisuHub(arg:{
 }):Promise<hubType[]> {
     try {
         arg.search += ' __shared'
-        const stringArg = `search==${arg.search}&&page==${arg.page}&&nsfw==${arg.nsfw}&&sort==${arg.sort}`
+        const stringArg = `search==${arg.search}&&page==${arg.page}&&nsfw==${arg.nsfw}&&sort==${arg.sort}&&web==${(!isNodeServer && !Capacitor.isNativePlatform() && !isTauri) ? 'web' : 'other'}`
 
         const da = await fetch(hubURL + '/realm/' + encodeURIComponent(stringArg))
         if(da.status !== 200){
             return []
         }
-        return da.json()   
+        const jso = await da.json()
+        if(Array.isArray(jso)){
+            return jso
+        }
+        hubAdditionalHTML = jso.additionalHTML || hubAdditionalHTML
+        return jso.cards
     } catch (error) {
         return[]
     }
@@ -1309,6 +1361,25 @@ export async function getHubResources(id:string) {
     return Buffer.from(await (res).arrayBuffer())
 }
 
+export function isCharacterHasAssets(char:character|groupChat){
+    if(char.type === 'group'){
+        return false
+    }
+
+    if(char.additionalAssets && char.additionalAssets.length > 0){
+        return true
+    }
+
+    if(char.emotionImages && char.emotionImages.length > 0){
+        return true
+    }
+
+    if(char.ccAssets && char.ccAssets.length > 0){
+        return true
+    }
+
+    return false
+}
 
 
 type CharacterCardV2Risu = {

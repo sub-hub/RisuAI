@@ -1,8 +1,17 @@
 
 const excludesDat = ['<','>','{','}','[',']','(',')','-',':',';','…','—','–','_','*','+','/','\\','|','!','?','.',',',' ']
-const selfClosingTags = ['br','hr','img','input','meta','link','base','area','col','command','embed','keygen','param','source','track','wbr']
+const selfClosingTags = [
+    'br','hr','img','input','meta','link','base','area','col','command','embed','keygen','param','source','track','wbr',
+    //self closing tags defined by HTML5
+    '!',
+    //for doctype <!DOCTYPE html> and comment <!-- -->
+    'user', 'bot', 'char'
+    //special tags for user, bot, and char
+]
 
 const checkSelfClosingTag = (dat:string) => {
+    dat = dat.substring(0, 10) //we only need to check the first 10 characters, to avoid checking the whole string
+    dat = dat.toLowerCase() //we don't care about the case
     for(const tag of selfClosingTags){
         if(dat.startsWith(tag)){
             return true
@@ -83,10 +92,12 @@ export function risuFormater(dat:string){
         }
     }
 
+    console.log(lines)
+
     let result = ''
     for(let i=0;i<lines.length;i++){
         if(lines[i][0] !== ''){
-            result += lines[i][1] + '\n'
+            result += lines[i][1]
             continue
         }
 
@@ -101,7 +112,7 @@ export function risuFormater(dat:string){
         }
 
         if(isNumbered || endMarked){
-            result += line + '\n'
+            result += line
             continue
         }
 
@@ -184,5 +195,6 @@ export function risuFormater(dat:string){
         result += lineResult
     }
 
+    console.log(result)
     return result.trim()
 }

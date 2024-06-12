@@ -6,7 +6,7 @@ import { getFileSrc } from './storage/globalApi';
 import { processScriptFull } from './process/scripts';
 import { get } from 'svelte/store';
 import css from '@adobe/css-tools'
-import { selectedCharID } from './stores';
+import { SizeStore, selectedCharID } from './stores';
 import { calcString } from './process/infunctions';
 import { findCharacterbyId, parseKeyValue, sfc32, uuidtoNumber } from './util';
 import { getInlayImage } from './process/files/image';
@@ -573,6 +573,33 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                     return f.role + ': ' + f.data
                 }).join("§\n")
             }
+
+            case 'user_history':
+            case 'user_messages':{
+                const selchar = db.characters[get(selectedCharID)]
+                const chat = selchar.chats[selchar.chatPage]
+                return chat.message.map((f) => {
+                    if(f.role === 'user'){
+                        return f.data
+                    }
+                    return ''
+                }).filter((f) => {
+                    return f !== ''
+                }).join("§\n")
+            }
+            case 'char_history':
+            case 'char_messages':{
+                const selchar = db.characters[get(selectedCharID)]
+                const chat = selchar.chats[selchar.chatPage]
+                return chat.message.map((f) => {
+                    if(f.role === 'char'){
+                        return f.data
+                    }
+                    return ''
+                }).filter((f) => {
+                    return f !== ''
+                }).join("§\n")
+            }
             case 'ujb':
             case 'global_note':
             case 'system_note':{
@@ -623,6 +650,17 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 const date = new Date(message.time)
                 //output date in format like Aug 23, 2021
                 return date.toLocaleDateString()
+            }
+            case 'message_unixtime_array':{
+                const selchar = db.characters[get(selectedCharID)]
+                const chat = selchar.chats[selchar.chatPage]
+                return chat.message.map((f) => {
+                    return f.time ?? 0
+                }).join('§')
+            }
+            case 'unixtime':{
+                const now = new Date()
+                return (now.getTime() / 1000).toFixed(0)
             }
             case 'time':{
                 const now = new Date()
@@ -786,6 +824,12 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
             case 'unixtime':{
                 return (Date.now() / 1000).toFixed(2)
             }
+            case 'screen_width':{
+                return get(SizeStore).w.toString()
+            }
+            case 'screen_height':{
+                return get(SizeStore).h.toString()
+            }
         }
         const arra = p1.split("::")
         if(arra.length > 1){
@@ -945,7 +989,7 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 }
                 case 'arrayelement':
                 case 'array_element':{
-                    return arra[1].split('§')[Number(arra[2])]
+                    return arra[1].split('§').at(Number(arra[2])) ?? 'null'
                 }
                 case 'arrayshift':
                 case 'array_shift':{
@@ -1006,7 +1050,15 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 case 'time':
                 case 'datetimeformat':
                 case 'date_time_format':{
-                    return dateTimeFormat(arra[1])
+                    const secondParam = arra[2]
+                    let t = 0
+                    if(secondParam){
+                        t = (Number(secondParam) / 1000)
+                        if(isNaN(t)){
+                            t = 0
+                        }
+                    }
+                    return dateTimeFormat(arra[1],t)
                 }
                 case 'module_enabled':{
                     const selchar = db.characters[get(selectedCharID)]
@@ -1019,6 +1071,28 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                         return f.name === arra[1]
                     }).id
                     return (db.enabledModules.includes(moduleId) || enabledChatModules.includes(moduleId)) ? '1' : '0'
+                }
+                case 'filter':{
+                    const array = arra[1].split('§')
+                    const filterTypes = [
+                        'all',
+                        'nonempty',
+                        'unique',
+                    ]
+                    let filterType = filterTypes.indexOf(arra[2])
+                    if(filterType === -1){
+                        filterType = 0
+                    }
+                    return array.filter((f, i) => {
+                        switch(filterType){
+                            case 0:
+                                return f !== '' && i === array.indexOf(f)
+                            case 1:
+                                return f !== ''
+                            case 2:
+                                return i === array.indexOf(f)               
+                        }
+                    }).join('§')
                 }
             }
         }
@@ -1124,8 +1198,8 @@ function pickHashRand(cid:number,word:string) {
     return randF()
 }
 
-const dateTimeFormat = (main:string) => {
-    const date = new Date()
+const dateTimeFormat = (main:string, time = 0) => {
+    const date = time === 0 ? (new Date()) : (new Date(time))
     if(!main){
         return ''
     }
