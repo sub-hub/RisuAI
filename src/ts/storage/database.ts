@@ -14,7 +14,7 @@ import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "114.1.1"
+export let appVer = "114.5.0"
 export let webAppSubVer = ''
 
 export function setDatabase(data:Database){
@@ -230,8 +230,8 @@ export function setDatabase(data:Database){
     if(checkNullish(data.supaMemoryKey)){
         data.supaMemoryKey = ""
     }
-    if(checkNullish(data.supaMemoryType)){
-        data.supaMemoryType = "none"
+    if(checkNullish(data.supaModelType)){
+        data.supaModelType = "none"
     }
     if(checkNullish(data.askRemoval)){
         data.askRemoval = true
@@ -417,6 +417,9 @@ export function setDatabase(data:Database){
     data.font ??= 'default'
     data.customFont ??= ''
     data.lineHeight ??= 1.25
+    data.stabilityModel ??= 'sd3-large'
+    data.stabllityStyle ??= ''
+    data.legacyTranslation ??= false
     changeLanguage(data.language)
     DataBase.set(data)
 }
@@ -525,7 +528,7 @@ export interface Database{
     useStreaming:boolean
     palmAPI:string,
     supaMemoryKey:string
-    supaMemoryType:string
+    supaModelType:string
     textScreenColor?:string
     textBorder?:boolean
     textScreenRounded?:boolean
@@ -567,6 +570,8 @@ export interface Database{
     useAdditionalAssetsPreview:boolean,
     usePlainFetch:boolean
     hypaMemory:boolean
+    hypav2:boolean
+    memoryAlgorithmType:string // To enable new memory module/algorithms 
     proxyRequestModel:string
     ooba:OobaSettings
     ainconfig: AINsettings
@@ -687,6 +692,10 @@ export interface Database{
     font: string
     customFont: string
     lineHeight: number
+    stabilityModel: string
+    stabilityKey: string
+    stabllityStyle: string
+    legacyTranslation: boolean
 }
 
 export interface customscript{

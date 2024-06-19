@@ -7,7 +7,7 @@ import { get } from "svelte/store";
 import {open} from '@tauri-apps/api/shell'
 import { DataBase, loadedStore, setDatabase, type Database, defaultSdDataFunc } from "./database";
 import { appWindow } from "@tauri-apps/api/window";
-import { checkUpdate } from "../update";
+import { checkRisuUpdate } from "../update";
 import { botMakerMode, selectedCharID } from "../stores";
 import { Body, ResponseType, fetch as TauriFetch } from "@tauri-apps/api/http";
 import { loadPlugins } from "../plugins/plugins";
@@ -419,7 +419,7 @@ export async function loadData() {
                         throw "Your save file is corrupted"
                     }
                 }
-                await checkUpdate()
+                await checkRisuUpdate()
                 await changeFullscreen()
     
             }
@@ -624,28 +624,32 @@ export async function globalFetch(url: string, arg: GlobalFetchArgs = {}): Promi
 
 // Decoupled globalFetch built-in function
 function addFetchLogInGlobalFetch(response:any, success:boolean, url:string, arg:GlobalFetchArgs){
-  try{
-      fetchLog.unshift({
-          body: JSON.stringify(arg.body, null, 2),
-          header: JSON.stringify(arg.headers ?? {}, null, 2),
-          response: JSON.stringify(response, null, 2),
-          success: success,
-          date: (new Date()).toLocaleTimeString(),
-          url: url,
-          chatId: arg.chatId
-      })
-  }
-  catch{
-      fetchLog.unshift({
-          body: JSON.stringify(arg.body, null, 2),
-          header: JSON.stringify(arg.headers ?? {}, null, 2),
-          response: `${response}`,
-          success: success,
-          date: (new Date()).toLocaleTimeString(),
-          url: url,
-          chatId: arg.chatId
-      })
-  }
+    try{
+        fetchLog.unshift({
+            body: JSON.stringify(arg.body, null, 2),
+            header: JSON.stringify(arg.headers ?? {}, null, 2),
+            response: JSON.stringify(response, null, 2),
+            success: success,
+            date: (new Date()).toLocaleTimeString(),
+            url: url,
+            chatId: arg.chatId
+        })
+    }
+    catch{
+        fetchLog.unshift({
+            body: JSON.stringify(arg.body, null, 2),
+            header: JSON.stringify(arg.headers ?? {}, null, 2),
+            response: `${response}`,
+            success: success,
+            date: (new Date()).toLocaleTimeString(),
+            url: url,
+            chatId: arg.chatId
+        })
+    }
+
+    if(fetchLog.length > 20){
+        fetchLog.pop()
+    }
 }
 
 // Decoupled globalFetch built-in function
