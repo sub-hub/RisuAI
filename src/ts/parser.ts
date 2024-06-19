@@ -6,9 +6,9 @@ import { getFileSrc } from './storage/globalApi';
 import { processScriptFull } from './process/scripts';
 import { get } from 'svelte/store';
 import css from '@adobe/css-tools'
-import { SizeStore, selectedCharID } from './stores';
+import { CurrentChat, SizeStore, selectedCharID } from './stores';
 import { calcString } from './process/infunctions';
-import { findCharacterbyId, parseKeyValue, sfc32, uuidtoNumber } from './util';
+import { findCharacterbyId, parseKeyValue, sfc32, sleep, uuidtoNumber } from './util';
 import { getInlayImage } from './process/files/image';
 import { risuFormater } from './plugins/automark';
 import { getModuleLorebooks } from './process/modules';
@@ -455,6 +455,9 @@ type matcherArg = {
     displaying?:boolean
     role?:string
     runVar?:boolean
+    funcName?:string
+    text?:string,
+    recursiveCount?:number
 }
 const matcher = (p1:string,matcherArg:matcherArg) => {
     try {
@@ -669,9 +672,9 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
             case 'message_unixtime_array':{
                 const selchar = db.characters[get(selectedCharID)]
                 const chat = selchar.chats[selchar.chatPage]
-                return chat.message.map((f) => {
-                    return f.time ?? 0
-                }).join('§')
+                return makeArray(chat.message.map((f) => {
+                    return `${f.time ?? 0}`
+                }))
             }
             case 'unixtime':{
                 const now = new Date()
@@ -820,9 +823,9 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 if(!selchar){
                     return ''
                 }
-                return selchar.emotionImages?.map((f) => {
+                return makeArray(selchar.emotionImages?.map((f) => {
                     return f[0]
-                })?.join('§') ?? ''
+                })) ?? ''
             }
             case 'assetlist':{
                 const selchar = db.characters[get(selectedCharID)]
@@ -943,13 +946,13 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                     return arra[1].replaceAll(arra[2], arra[3])
                 }
                 case 'split':{
-                    return arra[1].split(arra[2]).join('§')
+                    return makeArray(arra[1].split(arra[2]))
                 }
                 case 'join':{
-                    return arra[1].split('§').join(arra[2])
+                    return makeArray(parseArray(arra[1]))
                 }
                 case 'spread':{
-                    return arra[1].split('§').join('::')
+                    return makeArray(parseArray(arra[1]))
                 }
                 case 'trim':{
                     return arra[1].trim()
@@ -959,7 +962,7 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 }
                 case 'arraylength':
                 case 'array_length':{
-                    return arra[1].split('§').length.toString()
+                    return parseArray(arra[1]).length.toString()
                 }
                 case 'lower':{
                     return arra[1].toLocaleLowerCase()
@@ -992,28 +995,56 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
     
                 }
                 case 'tonumber':{
-                    return arra[1].split('').filter((v) => {
+                    return makeArray(arra[1].split('').filter((v) => {
                         return !isNaN(Number(v)) || v === '.'
-                    }).join('')
+                    }))
                 }
                 case 'pow':{
                     return Math.pow(Number(arra[1]), Number(arra[2])).toString()
                 }
                 case 'arrayelement':
                 case 'array_element':{
-                    return arra[1].split('§').at(Number(arra[2])) ?? 'null'
+                    return parseArray(arra[1]).at(Number(arra[2])) ?? 'null'
                 }
+                case 'dictelement':
+                case 'dict_element':
+                case 'objectelement':
+                case 'object_element':{
+                    return parseDict(arra[1])[arra[2]] ?? 'null'
+                }
+
+                case 'element':
+                case 'ele':{
+                    try {
+                        const agmts = arra.slice(2)
+                        let current = arra[1]
+                        for(const arg of agmts){
+                            const parsed = JSON.parse(current)
+                            if(parsed === null || (typeof(parsed) !== 'object' && !Array.isArray(parsed))){
+                                return 'null'
+                            }
+                            current = parsed[arg]
+                            if(!current){
+                                return 'null'
+                            }
+                        }
+                        return current
+                    } catch (error) {
+                        return 'null'
+                    }
+                }
+
                 case 'arrayshift':
                 case 'array_shift':{
-                    const arr = arra[1].split('§')
+                    const arr = parseArray(arra[1])
                     arr.shift()
-                    return arr.join('§')
+                    return makeArray(arr)
                 }
                 case 'arraypop':
                 case 'array_pop':{
-                    const arr = arra[1].split('§')
+                    const arr = parseArray(arra[1])
                     arr.pop()
-                    return arr.join('§')
+                    return makeArray(arr)
                 }
                 case 'arraypush':
                 case 'array_push':{
@@ -1021,31 +1052,60 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                 }
                 case 'arraysplice':
                 case 'array_splice':{
-                    const arr = arra[1].split('§')
+                    const arr = parseArray(arra[1])
                     arr.splice(Number(arra[2]), Number(arra[3]), arra[4])
-                    return arr.join('§')
+                    return makeArray(arr)
                 }
                 case 'makearray':
                 case 'array':
                 case 'a':
                 case 'make_array':{
-                    return arra.slice(1).join('§')
+                    return makeArray(arra.slice(1))
+                }
+                case 'makedict':
+                case 'dict':
+                case 'd':
+                case 'make_dict':
+                case 'makeobject':
+                case 'object':
+                case 'o':
+                case 'make_object':{
+                    //ideas:
+                    //  - {{o::key1:value1::key2:value2}} - its confusing for users
+                    //  - {{o::key1:value1,key2:value2}} - since comma can break the parser, this is not good
+                    //  - {{o::key=value::key2=value2}} - this is good enough I think, just need to escape the equal sign
+
+                    const sliced = arra.slice(1)
+                    let out = {}
+
+                    for(let i=0;i<sliced.length;i++){
+                        const current = sliced[i]
+                        const firstEqual = current.indexOf('=')
+                        if(firstEqual === -1){
+                            continue
+                        }
+                        const key = current.substring(0, firstEqual)
+                        const value = current.substring(firstEqual + 1)
+                        out[key] = value ?? 'null'
+                    }
+
+                    return JSON.stringify(out)
                 }
                 case 'history':
                 case 'messages':{
                     const selchar = db.characters[get(selectedCharID)]
                     const chat = selchar.chats[selchar.chatPage]
-                    return chat.message.map((f) => {
+                    return makeArray(chat.message.map((f) => {
                         let data = ''
                         if(arra.includes('role')){
                             data += f.role + ': '
                         }
                         data += f.data
                         return data
-                    }).join("§\n")
+                    }))
                 }
                 case 'range':{
-                    const arr = arra[1].split('§')
+                    const arr = parseArray(arra[1])
                     const start = arr.length > 1 ? Number(arr[0]) : 0
                     const end = arr.length > 1 ? Number(arr[1]) : Number(arr[0])
                     const step = arr.length > 2 ? Number(arr[2]) : 1
@@ -1085,7 +1145,7 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                     return (db.enabledModules.includes(moduleId) || enabledChatModules.includes(moduleId)) ? '1' : '0'
                 }
                 case 'filter':{
-                    const array = arra[1].split('§')
+                    const array = parseArray(arra[1])
                     const filterTypes = [
                         'all',
                         'nonempty',
@@ -1095,7 +1155,7 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                     if(filterType === -1){
                         filterType = 0
                     }
-                    return array.filter((f, i) => {
+                    return makeArray(array.filter((f, i) => {
                         switch(filterType){
                             case 0:
                                 return f !== '' && i === array.indexOf(f)
@@ -1104,7 +1164,7 @@ const matcher = (p1:string,matcherArg:matcherArg) => {
                             case 2:
                                 return i === array.indexOf(f)               
                         }
-                    }).join('§')
+                    }))
                 }
             }
         }
@@ -1305,8 +1365,31 @@ const legacyBlockMatcher = (p1:string,matcherArg:matcherArg) => {
 
 type blockMatch = 'ignore'|'parse'|'nothing'|'parse-pure'|'pure'|'each'
 
+function parseArray(p1:string):string[]{
+    try {
+        const arr = JSON.parse(p1)
+        if(Array.isArray(arr)){
+            return arr
+        }
+        return p1.split('§')
+    } catch (error) {
+        return p1.split('§')
+    }
+}
 
-function blockStartMatcher(p1:string,matcherArg:matcherArg):{type:blockMatch,type2?:string}{
+function parseDict(p1:string):{[key:string]:string}{
+    try {
+        return JSON.parse(p1)
+    } catch (error) {
+        return {}
+    }
+}
+
+function makeArray(p1:string[]):string{
+    return JSON.stringify(p1)
+}
+
+function blockStartMatcher(p1:string,matcherArg:matcherArg):{type:blockMatch,type2?:string,funcArg?:string[]}{
     if(p1.startsWith('#if') || p1.startsWith('#if_pure ')){
         const statement = p1.split(' ', 2)
         const state = statement[1]
@@ -1321,6 +1404,14 @@ function blockStartMatcher(p1:string,matcherArg:matcherArg):{type:blockMatch,typ
     if(p1.startsWith('#each')){
         return {type:'each',type2:p1.substring(5).trim()}
     }
+    if(p1.startsWith('#func')){
+        const statement = p1.split(' ')
+        if(matcherArg.funcName === statement[1]){
+            return {type:'parse',funcArg:statement.slice(2)}
+        }
+    }
+
+
     return {type:'nothing'}
 }
 
@@ -1493,7 +1584,7 @@ export function risuChatParser(da:string, arg:{
                         if(blockType.type === 'each'){
                             const subind = blockType.type2.lastIndexOf(' ')
                             const sub = blockType.type2.substring(subind + 1)
-                            const array = blockType.type2.substring(0, subind).split('§')
+                            const array = parseArray(blockType.type2.substring(0, subind))
                             let added = ''
                             for(let i = 0;i < array.length;i++){
                                 const res = matchResult.replaceAll(`{{slot::${sub}}}`, array[i])
@@ -1617,6 +1708,266 @@ export function risuChatParser(da:string, arg:{
         result = dat + result
     }
     return nested[0] + result
+}
+
+export async function commandMatcher(p1:string,matcherArg:matcherArg,vars:{[key:string]:string}):Promise<{
+    text:string,
+    var:{[key:string]:string}
+}> {
+    const arra = p1.split('::')
+
+    switch(arra[0]){
+        case 'localvar':
+        case 'getlocalvar':{
+            return {
+                text: vars[arra[1]] ?? '',
+                var: vars
+            }
+        }
+        case 'setlocalvar':{
+            vars[arra[1]] = arra[2]
+            return {
+                text: '',
+                var: vars
+            }
+        }
+        case 'pushchat':
+        case 'addchat':
+        case 'add_chat':
+        case 'push_chat':{
+            const chat = get(CurrentChat)
+            chat.message.push({role: arra[1] === 'user' ? 'user' : 'char', data: arra[2] ?? ''})
+            CurrentChat.set(chat)
+            return {
+                text: '',
+                var: vars
+            }
+        }
+        case 'setchat':
+        case 'set_chat':{
+            const chat = get(CurrentChat)
+            const message = chat.message?.at(Number(arra[1]))
+            if(message){
+                message.data = arra[2] ?? ''
+            }
+            CurrentChat.set(chat)
+        }
+        case 'regex':{
+            const reg = new RegExp(arra[1], arra[2])
+            const match = reg.exec(arra[3])
+            let res:string[] = []
+            for(let i = 0;i < match.length;i++){
+                res.push(match[i])
+            }
+            return {
+                text: makeArray(res),
+                var: vars
+            }
+        }
+        case 'replace_regex':
+        case 'replaceregex':{
+            const reg = new RegExp(arra[1], arra[2])
+            return {
+                text: arra[3].replace(reg, arra[4]),
+                var: vars
+            }
+        }
+        case 'call':{
+            const called = await risuCommandParser(arra[1], {
+                db: matcherArg.db,
+                chara: matcherArg.chara,
+                funcName: arra[2],
+                passed: arra.slice(3),
+                recursiveCount: (matcherArg.recursiveCount ?? 0) + 1
+            })
+
+            return {
+                text: called['__return__'] ?? '',
+                var: vars
+            }
+        }
+        case 'yield':{
+            vars['__return__'] = (vars['__return__'] ?? '') + arra[1]
+            return {
+                text: '',
+                var: vars
+            }
+        }
+        case 'return':{
+            vars['__return__'] = arra[1]
+            vars['__force_return__'] = '1'
+            return {
+                text: '',
+                var: vars
+            }
+        }
+    }
+
+    return {
+        text: matcher(p1, matcherArg).toString(),
+        var: vars
+    }
+}
+
+
+export async function risuCommandParser(da:string, arg:{
+    db?:Database
+    chara?:string|character|groupChat
+    funcName?:string
+    passed?:string[],
+    recursiveCount?:number
+} = {}):Promise<{[key:string]:string}>{
+    const db = arg.db ?? get(DataBase)
+    const aChara = arg.chara
+    let chara:character|string = null
+    let passed = arg.passed ?? []
+    let recursiveCount = arg.recursiveCount ?? 0
+
+    if(recursiveCount > 30){
+        return {}
+    }
+
+    if(aChara){
+        if(typeof(aChara) !== 'string' && aChara.type === 'group'){
+            const gc = findCharacterbyId(aChara.chats[aChara.chatPage].message.at(-1).saying ?? '')
+            if(gc.name !== 'Unknown Character'){
+                chara = gc
+            }
+        }
+        else{
+            chara = aChara
+        }
+    }
+    
+    let pointer = 0;
+    let nested:string[] = [""]
+    let stackType = new Uint8Array(512)
+    let pureModeNest:Map<number,boolean> = new Map()
+    let pureModeNestType:Map<number,string> = new Map()
+    let blockNestType:Map<number,{type:blockMatch,type2?:string}> = new Map()
+    const matcherObj = {
+        chatID: -1,
+        chara: chara,
+        rmVar: false,
+        db: db,
+        var: null,
+        tokenizeAccurate: false,
+        displaying: false,
+        role: null,
+        runVar: false,
+        consistantChar: false,
+        funcName: arg.funcName ?? null,
+        text: da,
+        recursiveCount: recursiveCount
+    }
+
+    let tempVar:{[key:string]:string} = {}
+
+    const isPureMode = () => {
+        return pureModeNest.size > 0
+    }
+    while(pointer < da.length){
+        switch(da[pointer]){
+            case '{':{
+                if(da[pointer + 1] !== '{' && da[pointer + 1] !== '#'){
+                    nested[0] += da[pointer]
+                    break
+                }
+                pointer++
+                nested.unshift('')
+                stackType[nested.length] = 1
+                break
+            }
+            case '}':{
+                if(da[pointer + 1] !== '}' || nested.length === 1 || stackType[nested.length] !== 1){
+                    nested[0] += da[pointer]
+                    break
+                }
+                pointer++
+                const dat = nested.shift()
+                if(dat.startsWith('#')){
+                    if(isPureMode()){
+                        nested[0] += `{{${dat}}}`
+                        nested.unshift('')
+                        stackType[nested.length] = 6
+                        break
+                    }
+                    const matchResult = blockStartMatcher(dat, matcherObj)
+                    if(matchResult.type === 'nothing'){
+                        nested[0] += `{{${dat}}}`
+                        break
+                    }
+                    else{
+                        nested.unshift('')
+                        stackType[nested.length] = 5
+                        blockNestType.set(nested.length, matchResult)
+                        if(matchResult.type === 'ignore' || matchResult.type === 'pure' || matchResult.type === 'each'){
+                            pureModeNest.set(nested.length, true)
+                            pureModeNestType.set(nested.length, "block")
+                        }
+                        if(matchResult.funcArg){
+                            for(let i = 0;i < matchResult.funcArg.length;i++){
+                                tempVar[matchResult.funcArg[i]] = passed[i]
+                            }
+                        }
+                        break
+                    }
+                }
+                if(dat.startsWith('/')){
+                    if(stackType[nested.length] === 5){
+                        const blockType = blockNestType.get(nested.length)
+                        if(blockType.type === 'ignore' || blockType.type === 'pure' || blockType.type === 'each'){
+                            pureModeNest.delete(nested.length)
+                            pureModeNestType.delete(nested.length)
+                        }
+                        blockNestType.delete(nested.length)
+                        const dat2 = nested.shift()
+                        const matchResult = blockEndMatcher(dat2.trim(), blockType, matcherObj)
+                        if(blockType.type === 'each'){
+                            const subind = blockType.type2.lastIndexOf(' ')
+                            const sub = blockType.type2.substring(subind + 1)
+                            const array = parseArray(blockType.type2.substring(0, subind))
+                            let added = ''
+                            for(let i = 0;i < array.length;i++){
+                                const res = matchResult.replaceAll(`{{slot::${sub}}}`, array[i])
+                                added += res
+                            }
+                            da = da.substring(0, pointer + 1) + added.trim() + da.substring(pointer + 1)
+                            break
+                        }
+                        if(matchResult === ''){
+                            break
+                        }
+                        nested[0] += matchResult
+                        break
+                    }
+                    if(stackType[nested.length] === 6){
+                        console.log(dat)
+                        const sft = nested.shift()
+                        nested[0] += sft + `{{${dat}}}`
+                        break
+                    }
+                }
+                const mc = isPureMode() ? {
+                    text:null,
+                    var:tempVar
+                } : (await commandMatcher(dat, matcherObj, tempVar))
+                tempVar = mc.var
+                if(tempVar['__force_return__']){
+                    return tempVar
+                }
+                nested[0] += mc.text ?? `{{${dat}}}`
+                break
+            }
+            default:{
+                nested[0] += da[pointer]
+                break
+            }
+        }
+        pointer++
+    }
+    return tempVar
+
 }
 
 
