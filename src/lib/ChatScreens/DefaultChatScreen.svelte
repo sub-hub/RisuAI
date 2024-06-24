@@ -329,10 +329,9 @@
         })
     }
 
-    async function screenShot(){
+    async function screenShot(saveChatsSeparately = false){
         const db = get(DataBase)
         const customBackgroundColor = db.textScreenColor ?? 'var(--risu-theme-bgcolor)';
-        let saveChatsSeparately = true; // New flag to determine the saving method
         try {
             loadPages = Infinity
             const html2canvas = await import('html-to-image');
@@ -394,7 +393,7 @@
                 mergedCanvas.height = totalHeight;
             }
 
-            mergedCtx.fillStyle = 'var(--risu-theme-bgcolor)'
+            mergedCtx.fillStyle = customBackgroundColor;
             mergedCtx.fillRect(0, 0, maxWidth, totalHeight);
             let indh = 0
             for(let i = 0; i < canvases.length; i++) {
@@ -735,6 +734,13 @@
                     }}>
                         <CameraIcon />
                         <span class="ml-2">{language.screenshot}</span>
+                    </div>
+
+                    <div class="flex items-center cursor-pointer hover:text-green-500 transition-colors" on:click={() => {
+                        screenShot(true)
+                    }}>
+                        <CameraIcon />
+                        <span class="ml-2">분리 스크린샷</span>
                     </div>
 
                     <div class="flex items-center cursor-pointer hover:text-green-500 transition-colors" on:click={async () => {
