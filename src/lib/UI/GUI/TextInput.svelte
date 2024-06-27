@@ -1,8 +1,9 @@
 
 <!-- Since svelte doesn't allow two-way binding for dynamic types, we use this -->
 
-<!-- disable hide text -->
 <!-- {#if hideText} -->
+<!-- new-password disables autofill -->
+<!-- disable hide text -->
 {#if false}
     <input 
         class={"border border-darkborderc peer focus:border-borderc rounded-md shadow-sm text-textcolor bg-transparent focus:ring-borderc focus:ring-2 focus:outline-none transition-colors duration-200" + ((className) ? (' ' + className) : '')} 
@@ -24,7 +25,7 @@
         class:h-full={fullh}
         class:text-textcolor2={disabled}
 
-        {autocomplete}
+        autocomplete="new-password"
         {placeholder}
         id={id}
         type="password"
