@@ -1002,3 +1002,25 @@ export const sortableOptions = {
 	delay: 300, // time in milliseconds to define when the sorting should start
 	delayOnTouchOnly: true
 } as const
+
+
+function createLanguageChecker(languageRegex, threshold = 0.5) {
+    return function(sentence) {
+        // remove white spaces
+        sentence = sentence.replace(/\s/g, '');
+        // Find all characters in the sentence that match the language regex
+        const matchingChars = sentence.match(languageRegex);
+
+        // Calculate the proportion of matching characters in the sentence
+        const matchingCharCount = matchingChars ? matchingChars.length : 0;
+        const totalCharCount = sentence.length;
+        console.log("언어 감지: "+sentence, totalCharCount, matchingCharCount);
+        console.log(matchingChars);
+
+        // Determine if the proportion of matching characters exceeds the threshold
+        return (matchingCharCount / totalCharCount) > threshold;
+    };
+}
+
+const koreanRegex = /[가-힣]/g;
+export const isKoreanSentence = createLanguageChecker(koreanRegex);

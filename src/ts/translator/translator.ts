@@ -8,7 +8,7 @@ import { doingChat } from "../process"
 import type { simpleCharacterArgument } from "../parser"
 import { selectedCharID } from "../stores"
 import { getModuleRegexScripts } from "../process/modules"
-import { getNodetextToSentence, sleep, applyMarkdownToNode } from "../util"
+import { getNodetextToSentence, sleep, applyMarkdownToNode, isKoreanSentence } from "../util"
 import { processScriptFull } from "../process/scripts"
 import { Capacitor } from "@capacitor/core"
 
@@ -314,7 +314,14 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
             }
 
             // node.textContent = await translate(node.textContent || '', reverse);
-            let translated = await translate(node.textContent || "", reverse);
+            let translated;
+
+            // if is korean sentence, don't translate
+            if(isKoreanSentence(node.textContent)){
+                translated = node.textContent
+            } else {
+                translated= await translate(node.textContent || "", reverse);
+            }
             if (!reprocessDisplayScript) {
                 node.textContent = translated;
                 return;
