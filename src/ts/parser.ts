@@ -88,9 +88,7 @@ function renderMarkdown(md:markdownit, data:string){
 
 async function renderHighlightableMarkdown(data:string) {
     let rendered = renderMarkdown(mdHighlight, data)
-    console.log(rendered)
     const highlightPlaceholders = rendered.match(/<pre-hljs-placeholder lang="(.+?)">(.+?)<\/pre-hljs-placeholder>/gms)
-    console.log(highlightPlaceholders)
     if (!highlightPlaceholders){
         return rendered
     }
@@ -650,19 +648,16 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
         switch(lowerCased){
             case 'previous_char_chat':
             case 'lastcharmessage':{
-                if(chatID !== -1){
-                    const selchar = db.characters[get(selectedCharID)]
-                    const chat = selchar.chats[selchar.chatPage]
-                    let pointer = chatID - 1
-                    while(pointer >= 0){
-                        if(chat.message[pointer].role === 'char'){
-                            return chat.message[pointer].data
-                        }
-                        pointer--
+                const selchar = db.characters[get(selectedCharID)]
+                const chat = selchar.chats[selchar.chatPage]
+                let pointer = chatID !== -1 ? chatID - 1 : chat.message.length - 1
+                while(pointer >= 0){
+                    if(chat.message[pointer].role === 'char'){
+                        return chat.message[pointer].data
                     }
-                    return selchar.firstMsgIndex === -1 ? selchar.firstMessage : selchar.alternateGreetings[selchar.firstMsgIndex]
+                    pointer--
                 }
-                return ''
+                return selchar.firstMsgIndex === -1 ? selchar.firstMessage : selchar.alternateGreetings[selchar.firstMsgIndex]
             }
             case 'previous_user_chat':
             case 'lastusermessage':{
@@ -1031,7 +1026,6 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
             switch(arra[0]){
                 case 'tempvar':
                 case 'gettempvar':{
-                    console.log(vars)
                     return {
                         text: vars[arra[1]] ?? '',
                         var: vars
@@ -1876,7 +1870,6 @@ export function risuChatParser(da:string, arg:{
                         break
                     }
                     if(stackType[nested.length] === 6){
-                        console.log(dat)
                         const sft = nested.shift()
                         nested[0] += sft + `{{${dat}}}`
                         break
@@ -2385,7 +2378,6 @@ export async function risuCommandParser(da:string, arg:{
                         break
                     }
                     if(stackType[nested.length] === 6){
-                        console.log(dat)
                         const sft = nested.shift()
                         nested[0] += sft + `{{${dat}}}`
                         break
