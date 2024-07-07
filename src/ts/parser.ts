@@ -1191,9 +1191,9 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
     
                 }
                 case 'tonumber':{
-                    return makeArray(arra[1].split('').filter((v) => {
+                    return (arra[1].split('').filter((v) => {
                         return !isNaN(Number(v)) || v === '.'
-                    }))
+                    })).join('')
                 }
                 case 'pow':{
                     return Math.pow(Number(arra[1]), Number(arra[2])).toString()
@@ -1654,7 +1654,12 @@ function parseDict(p1:string):{[key:string]:string}{
 }
 
 function makeArray(p1:string[]):string{
-    return JSON.stringify(p1)
+    return JSON.stringify(p1.map((f) => {
+        if(typeof(f) === 'string'){
+            return f.replace(/::/g, '\\u003A\\u003A')
+        }
+        return f
+    }))
 }
 
 function blockStartMatcher(p1:string,matcherArg:matcherArg):{type:blockMatch,type2?:string,funcArg?:string[]}{
@@ -2540,4 +2545,56 @@ export function applyMarkdownToNode(node: Node) {
             applyMarkdownToNode(child);
         }
     }
+}
+
+export function parseChatML(data:string):OpenAIChat[]|null{
+
+    const starter = '<|im_start|>'
+    const seperator = '<|im_sep|>'
+    const ender = '<|im_end|>'
+    const trimedData = data.trim()
+    if(!trimedData.startsWith(starter)){
+        return null
+    }
+
+    return trimedData.split(starter).filter((f) => f !== '').map((v) => {
+        let role:'system'|'user'|'assistant' = 'user'
+        //default separators
+        if(v.startsWith('user' + seperator)){
+            role = 'user'
+            v = v.substring(4 + seperator.length)
+        }
+        else if(v.startsWith('system' + seperator)){
+            role = 'system'
+            v = v.substring(6 + seperator.length)
+        }
+        else if(v.startsWith('assistant' + seperator)){
+            role = 'system'
+            v = v.substring(9 + seperator.length)
+        }
+        //space/newline separators
+        else if(v.startsWith('user ') || v.startsWith('user\n')){
+            role = 'user'
+            v = v.substring(5)
+        }
+        else if(v.startsWith('system ') || v.startsWith('system\n')){
+            role = 'system'
+            v = v.substring(7)
+        }
+        else if(v.startsWith('assistant ') || v.startsWith('assistant\n')){
+            role = 'assistant'
+            v = v.substring(10)
+        }
+
+        v = v.trim()
+
+        if(v.endsWith(ender)){
+            v = v.substring(0, v.length - ender.length)
+        }
+
+        return {
+            role: role,
+            content: v
+        }
+    })
 }
