@@ -1,6 +1,6 @@
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "120.2.0"
+export let appVer = "122.0.1"
 export let webAppSubVer = ''
 
 import { get, writable } from 'svelte/store';
@@ -827,6 +827,7 @@ export interface character{
     }>
     defaultVariables?:string
     lowLevelAccess?:boolean
+    hideChatIcon?:boolean
 }
 
 
@@ -874,6 +875,7 @@ export interface groupChat{
     nickname?:string
     defaultVariables?:string
     lowLevelAccess?:boolean
+    hideChatIcon?:boolean
 }
 
 export interface botPreset{

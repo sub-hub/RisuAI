@@ -668,4 +668,6 @@ export const languageEnglish = {
     codeMode: "Code",
     blockMode: "Block",
     helpBlock: "Help",
+    hideChatIcon: "Hide Icon UI",
+    loadInternalBackup: "Load Internal Backup",
 }
