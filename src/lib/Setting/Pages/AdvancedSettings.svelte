@@ -157,7 +157,7 @@
     on:click={async () => {
         alertMd(getRequestLog())
     }}
-    class="drop-shadow-lg p-3 border-borderc border-solid mt-6 flex justify-center items-center ml-2 mr-2 border-1 hover:bg-selected text-sm">
+    class="drop-shadow-lg p-3 border-darkborderc border-solid mt-6 flex justify-center items-center ml-2 mr-2 border-1 hover:bg-selected text-sm">
     {language.ShowLog}
 </button>
 {#if Capacitor.isNativePlatform()}
@@ -165,7 +165,7 @@
         on:click={async () => {
             estaStorage = await capStorageInvestigation()
         }}
-        class="drop-shadow-lg p-3 border-borderc border-solid mt-6 flex justify-center items-center ml-2 mr-2 border-1 hover:bg-selected text-sm">
+        class="drop-shadow-lg p-3 border-darkborderc border-solid mt-6 flex justify-center items-center ml-2 mr-2 border-1 hover:bg-selected text-sm">
         Investigate Storage
     </button>
 
@@ -185,7 +185,7 @@
         on:click={async () => {
             installPython()
         }}
-        class="drop-shadow-lg p-3 border-borderc border-solid mt-6 flex justify-center items-center ml-2 mr-2 border-1 hover:bg-selected text-sm">
+        class="drop-shadow-lg p-3 border-darkbutton border-solid mt-6 flex justify-center items-center ml-2 mr-2 border-1 hover:bg-selected text-sm">
         Test Python
     </button>
 {/if}
