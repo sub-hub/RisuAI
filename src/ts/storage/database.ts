@@ -1,6 +1,6 @@
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "122.1.2"
+export let appVer = "123.0.0"
 export let webAppSubVer = ''
 
 import { get, writable } from 'svelte/store';
@@ -420,6 +420,16 @@ export function setDatabase(data:Database){
     data.stabilityModel ??= 'sd3-large'
     data.stabllityStyle ??= ''
     data.legacyTranslation ??= false
+    data.comfyUiUrl ??= 'http://localhost:8188'
+    data.comfyConfig ??= {
+        workflow: '',
+        posNodeID: '',
+        posInputName: 'text',
+        negNodeID: '',
+        negInputName: 'text',
+        timeout: 30
+    }
+
     changeLanguage(data.language)
     DataBase.set(data)
 }
@@ -586,6 +596,7 @@ export interface Database{
         name:string
         icon:string
         largePortrait?:boolean
+        id?:string
     }[]
     assetWidth:number
     animationSpeed:number
@@ -696,6 +707,9 @@ export interface Database{
     stabilityKey: string
     stabllityStyle: string
     legacyTranslation: boolean
+    comfyConfig: ComfyConfig
+    comfyUiUrl: string
+    useLegacyGUI: boolean
 }
 
 export interface customscript{
@@ -968,6 +982,16 @@ interface NAIImgConfig{
     InfoExtracted:number,
     RefStrength:number
 }
+
+interface ComfyConfig{
+    workflow:string,
+    posNodeID: string,
+    posInputName:string,
+    negNodeID: string,
+    negInputName:string,
+    timeout: number
+}
+
 export type FormatingOrderItem = 'main'|'jailbreak'|'chats'|'lorebook'|'globalNote'|'authorNote'|'lastChat'|'description'|'postEverything'|'personaPrompt'
 
 export interface Chat{
@@ -984,6 +1008,7 @@ export interface Chat{
     scriptstate?:{[key:string]:string|number|boolean}
     modules?:string[]
     id?:string
+    bindedPersona?:string
 }
 
 export interface Message{

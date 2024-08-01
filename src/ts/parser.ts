@@ -7,7 +7,7 @@ import { get } from 'svelte/store';
 import css from '@adobe/css-tools'
 import { CurrentCharacter, CurrentChat, SizeStore, selectedCharID } from './stores';
 import { calcString } from './process/infunctions';
-import { findCharacterbyId, parseKeyValue, sfc32, sleep, uuidtoNumber } from './util';
+import { findCharacterbyId, getPersonaPrompt, getUserIcon, getUserName, parseKeyValue, sfc32, sleep, uuidtoNumber } from './util';
 import { getInlayImage, writeInlayImage } from './process/files/image';
 import { getModuleLorebooks } from './process/modules';
 import { HypaProcesser } from './process/memory/hypamemory';
@@ -336,7 +336,7 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
         )
 
         data = data.replace(/\uE9b4USER\uE9b4/g,
-            db.userIcon ? (await getFileSrc(db.userIcon)) : ''
+            getUserIcon() ? (await getFileSrc(getUserIcon())) : ''
         )
     }
     
@@ -718,7 +718,7 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                 if(matcherArg.consistantChar){
                     return 'username'
                 }
-                return db.username
+                return getUserName()
             }
             case 'personality':
             case 'char_persona':{
@@ -757,7 +757,7 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
             }
             case 'persona':
             case 'user_persona':{
-                return db.personaPrompt
+                return getPersonaPrompt()
             }
             case 'main_prompt':
             case 'system_prompt':{
@@ -1628,7 +1628,7 @@ const smMatcher = (p1:string,matcherArg:matcherArg) => {
             if(matcherArg.consistantChar){
                 return 'username'
             }
-            return db.username
+            return getUserName()
         }
     }
 }
