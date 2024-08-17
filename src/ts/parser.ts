@@ -2551,6 +2551,9 @@ export function applyMarkdownToNode(node: Node) {
         const text = node.textContent;
         if (text) {
             let markdown = renderMarkdown(md, text);
+            
+            // remove "<p>" and "</p>\n" from the start and end of the string
+            markdown = markdown.replace(/^<p>/, '').replace(/<\/p>\n$/, '');
             if (markdown !== text) {
                 const span = document.createElement('span');
                 span.innerHTML = markdown;
