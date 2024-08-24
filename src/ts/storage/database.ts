@@ -1,6 +1,6 @@
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "124.2.1"
+export let appVer = "125.0.0"
 export let webAppSubVer = ''
 
 import { get, writable } from 'svelte/store';
@@ -429,6 +429,8 @@ export function setDatabase(data:Database){
         negInputName: 'text',
         timeout: 30
     }
+    data.hideApiKey ??= true
+    data.unformatQuotes ??= false
 
     changeLanguage(data.language)
     DataBase.set(data)
@@ -711,6 +713,9 @@ export interface Database{
     comfyUiUrl: string
     useLegacyGUI: boolean
     claudeCachingExperimental: boolean
+    hideApiKey: boolean
+    unformatQuotes: boolean
+    enableDevTools: boolean
 }
 
 export interface customscript{
@@ -802,6 +807,25 @@ export interface character{
         customvoice?: boolean
         voice?: string
         version?: string
+    }
+    gptSoVitsConfig?:{
+        url?:string
+        ref_audio_path?:string
+        ref_audio_data?: {
+            fileName:string
+            assetId:string
+        }
+        volume?:number
+        text_lang?: "auto" | "auto_yue" | "en" | "zh" | "ja" | "yue" | "ko" | "all_zh" | "all_ja" | "all_yue" | "all_ko"
+        text?:string
+        use_prompt?:boolean
+        prompt?:string | null
+        prompt_lang?: "auto" | "auto_yue" | "en" | "zh" | "ja" | "yue" | "ko" | "all_zh" | "all_ja" | "all_yue" | "all_ko"
+        top_p?:number
+        temperature?:number
+        speed?:number
+        top_k?:number
+        text_split_method?: "cut0" | "cut1" | "cut2" | "cut3" | "cut4" | "cut5"
     }
     supaMemory?:boolean
     additionalAssets?:[string, string, string][]
