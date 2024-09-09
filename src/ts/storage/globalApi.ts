@@ -12,7 +12,7 @@ import { checkRisuUpdate } from "../update";
 import { botMakerMode, selectedCharID } from "../stores";
 import { Body, ResponseType, fetch as TauriFetch } from "@tauri-apps/api/http";
 import { loadPlugins } from "../plugins/plugins";
-import { alertConfirm, alertError, alertNormal, alertNormalWait, alertSelect } from "../alert";
+import { alertConfirm, alertError, alertNormal, alertNormalWait, alertSelect, alertTOS } from "../alert";
 import { checkDriverInit, syncDrive } from "../drive/drive";
 import { hasher } from "../parser";
 import { characterURLImport, hubURL } from "../characterCards";
@@ -536,7 +536,14 @@ export async function loadData() {
             loadedStore.set(true)
             selectedCharID.set(-1)
             startObserveDom()
-            saveDb()   
+            saveDb()
+            if(import.meta.env.VITE_RISU_TOS === 'TRUE'){
+                alertTOS().then((a) => {
+                    if(a === false){
+                        location.reload()
+                    }
+                })
+            }
         } catch (error) {
             alertError(`${error}`)
         }
@@ -570,6 +577,7 @@ const knownHostes = ["localhost","127.0.0.1","0.0.0.0"]
 
 interface GlobalFetchArgs {
   plainFetchForce?: boolean;
+  plainFetchDeforce?: boolean;
   body?: any;
   headers?: { [key: string]: string };
   rawResponse?: boolean;
@@ -618,7 +626,7 @@ export async function globalFetch(url: string, arg: GlobalFetchArgs = {}): Promi
     if (arg.abortSignal?.aborted) { return { ok: false, data: 'aborted', headers: {} }}
 
     const urlHost = new URL(url).hostname
-    const forcePlainFetch = (knownHostes.includes(urlHost) && !isTauri) || db.usePlainFetch || arg.plainFetchForce
+    const forcePlainFetch = ((knownHostes.includes(urlHost) && !isTauri) || db.usePlainFetch || arg.plainFetchForce) && !arg.plainFetchDeforce
 
     if (knownHostes.includes(urlHost) && !isTauri && !isNodeServer){
         return { ok: false, headers: {}, data: 'You are trying local request on web version. This is not allowed due to browser security policy. Use the desktop version instead, or use a tunneling service like ngrok and set the CORS to allow all.' }
@@ -835,6 +843,17 @@ export function getUnpargeables(db:Database, uptype:'basename'|'pure' = 'basenam
             if(cha.ccAssets){
                 for(const asset of cha.ccAssets){
                     addUnparge(asset.uri)
+                }
+            }
+        }
+    }
+
+    if(db.modules){
+        for(const module of db.modules){
+            const assets = module.assets
+            if(assets){
+                for(const asset of assets){
+                    addUnparge(asset[1])
                 }
             }
         }

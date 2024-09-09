@@ -4,12 +4,12 @@ import { DataBase, setDatabase, type Database, type Message, type character, typ
 import { getFileSrc } from './storage/globalApi';
 import { processScriptFull } from './process/scripts';
 import { get } from 'svelte/store';
-import css from '@adobe/css-tools'
+import css, { type CssAtRuleAST } from '@adobe/css-tools'
 import { CurrentCharacter, CurrentChat, SizeStore, selectedCharID } from './stores';
 import { calcString } from './process/infunctions';
 import { findCharacterbyId, getPersonaPrompt, getUserIcon, getUserName, parseKeyValue, sfc32, sleep, uuidtoNumber } from './util';
 import { getInlayImage, writeInlayImage } from './process/files/image';
-import { getModuleLorebooks } from './process/modules';
+import { getModuleAssets, getModuleLorebooks } from './process/modules';
 import { HypaProcesser } from './process/memory/hypamemory';
 import { generateAIImage } from './process/stableDiff';
 import { requestChatData } from './process/request';
@@ -250,7 +250,7 @@ async function renderHighlightableMarkdown(data:string) {
 }
 
 
-export const assetRegex = /{{(raw|img|video|audio|bg|emotion|asset|video-img|source)::(.+?)}}/g
+export const assetRegex = /{{(raw|path|img|image|video|audio|bg|emotion|asset|video-img|source)::(.+?)}}/g
 
 async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|character, mode:'normal'|'back', mode2:'unset'|'pre'|'post' = 'unset'){
     const db = get(DataBase)
@@ -278,6 +278,16 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
             const emoPath = await getFileSrc(emo[1])
             emoPaths[emo[0].toLocaleLowerCase()] = {
                 path: emoPath,
+            }
+        }
+    }
+    const moduleAssets = getModuleAssets()
+    if(moduleAssets.length > 0){
+        for(const asset of moduleAssets){
+            const assetPath = await getFileSrc(asset[1])
+            assetPaths[asset[0].toLocaleLowerCase()] = {
+                path: assetPath,
+                ext: asset[2]
             }
         }
     }
@@ -312,9 +322,12 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
         }
         switch(type){
             case 'raw':
+            case 'path':
                 return path.path
             case 'img':
                 return `<img src="${path.path}" alt="${path.path}" style="${assetWidthString} "/>`
+            case 'image':
+                return `<div class="risu-inlay-image"><img src="${path.path}" alt="${path.path}" style="${assetWidthString}"/></div>\n`
             case 'video':
                 return `<video controls autoplay loop><source src="${path.path}" type="video/mp4"></video>`
             case 'video-img':
@@ -486,6 +499,32 @@ function encodeStyle(txt:string){
 }
 const styleDecodeRegex = /\<risu-style\>(.+?)\<\/risu-style\>/gms
 
+function decodeStyleRule(rule:CssAtRuleAST){
+    if(rule.type === 'rule'){
+        if(rule.selectors){
+            for(let i=0;i<rule.selectors.length;i++){
+                let slt:string = rule.selectors[i]
+                if(slt){
+                    let selectors = (slt.split(' ') ?? []).map((v) => {
+                        if(v.startsWith('.')){
+                            return ".x-risu-" + v.substring(1)
+                        }
+                        return v
+                    }).join(' ')
+
+                    rule.selectors[i] = ".chattext " + selectors
+                }
+            }
+        }
+    }
+    if(rule.type === 'media' || rule.type === 'supports' || rule.type === 'document' || rule.type === 'host' || rule.type === 'container' ){
+        for(let i=0;i<rule.rules.length;i++){
+            rule.rules[i] = decodeStyleRule(rule.rules[i])
+        }
+    }
+    return rule
+}
+
 function decodeStyle(text:string){
 
     return text.replaceAll(styleDecodeRegex, (full, txt:string) => {
@@ -493,26 +532,10 @@ function decodeStyle(text:string){
             const ast = css.parse(Buffer.from(txt, 'hex').toString('utf-8'))
             const rules = ast?.stylesheet?.rules
             if(rules){
-                for(const rule of rules){
-
-                    if(rule.type === 'rule'){
-                        if(rule.selectors){
-                            for(let i=0;i<rule.selectors.length;i++){
-                                let slt:string = rule.selectors[i]
-                                if(slt){
-                                    let selectors = (slt.split(' ') ?? []).map((v) => {
-                                        if(v.startsWith('.')){
-                                            return ".x-risu-" + v.substring(1)
-                                        }
-                                        return v
-                                    }).join(' ')
-        
-                                    rule.selectors[i] = ".chattext " + selectors
-                                }
-                            }
-                        }
-                    }
+                for(let i=0;i<rules.length;i++){
+                    rules[i] = decodeStyleRule(rules[i])
                 }
+                ast.stylesheet.rules = rules
             }
             return `<style>${css.stringify(ast)}</style>`
 

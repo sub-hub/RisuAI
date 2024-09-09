@@ -1,6 +1,6 @@
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "125.0.0"
+export let appVer = "128.0.1"
 export let webAppSubVer = ''
 
 import { get, writable } from 'svelte/store';
@@ -431,7 +431,10 @@ export function setDatabase(data:Database){
     }
     data.hideApiKey ??= true
     data.unformatQuotes ??= false
-
+    data.ttsAutoSpeech ??= false
+    data.translatorInputLanguage ??= 'auto'
+    data.falModel ??= 'fal-ai/flux/dev'
+    data.falLoraScale ??= 1
     changeLanguage(data.language)
     DataBase.set(data)
 }
@@ -511,6 +514,7 @@ export interface Database{
     NAII2I:boolean
     NAIREF:boolean
     NAIImgConfig:NAIImgConfig
+    ttsAutoSpeech?:boolean
     runpodKey:string
     promptPreprocess:boolean
     bias: [string, number][]
@@ -615,6 +619,7 @@ export interface Database{
     emotionProcesser:'submodel'|'embedding',
     showMenuChatList?:boolean,
     translatorType:'google'|'deepl'|'none'|'llm'|'deeplX',
+    translatorInputLanguage?:string
     NAIadventure?:boolean,
     NAIappendName?:boolean,
     deeplOptions:{
@@ -716,6 +721,12 @@ export interface Database{
     hideApiKey: boolean
     unformatQuotes: boolean
     enableDevTools: boolean
+    falToken: string
+    falModel: string
+    falLora: string
+    falLoraName: string
+    falLoraScale: number
+    moduleIntergration: string
 }
 
 export interface customscript{
@@ -810,7 +821,9 @@ export interface character{
     }
     gptSoVitsConfig?:{
         url?:string
+        use_auto_path?:boolean
         ref_audio_path?:string
+        use_long_audio?:boolean
         ref_audio_data?: {
             fileName:string
             assetId:string
@@ -964,6 +977,10 @@ export interface botPreset{
     useInstructPrompt?:boolean
     customPromptTemplateToggle?:string
     templateDefaultVariables?:string
+    moduleIntergration?:string
+    top_k?:number
+    instructChatTemplate?:string
+    JinjaTemplate?:string
 }
 
 
@@ -1243,6 +1260,10 @@ export function saveCurrentPreset(){
         useInstructPrompt: db.useInstructPrompt,
         customPromptTemplateToggle: db.customPromptTemplateToggle ?? "",
         templateDefaultVariables: db.templateDefaultVariables ?? "",
+        moduleIntergration: db.moduleIntergration ?? "",
+        top_k: db.top_k,
+        instructChatTemplate: db.instructChatTemplate,
+        JinjaTemplate: db.JinjaTemplate ?? ''
     }
     db.botPresets = pres
     setDatabase(db)
@@ -1327,6 +1348,10 @@ export function setPreset(db:Database, newPres: botPreset){
     db.useInstructPrompt = newPres.useInstructPrompt ?? false
     db.customPromptTemplateToggle = newPres.customPromptTemplateToggle ?? ''
     db.templateDefaultVariables = newPres.templateDefaultVariables ?? ''
+    db.moduleIntergration = newPres.moduleIntergration ?? ''
+    db.top_k = newPres.top_k ?? db.top_k
+    db.instructChatTemplate = newPres.instructChatTemplate ?? db.instructChatTemplate
+    db.JinjaTemplate = newPres.JinjaTemplate ?? db.JinjaTemplate
     return db
 }
 
@@ -1335,6 +1360,7 @@ import * as fflate from "fflate";
 import type { OnnxModelFiles } from '../process/transformers';
 import type { RisuModule } from '../process/modules';
 import type { HypaV2Data } from '../process/memory/hypav2';
+import { decodeRPack, encodeRPack } from '../rpack/rpack_bg';
 
 export async function downloadPreset(id:number, type:'json'|'risupreset'|'return' = 'json'){
     saveCurrentPreset()
@@ -1359,8 +1385,10 @@ export async function downloadPreset(id:number, type:'json'|'risupreset'|'return
                 'risupreset'
             )
         }))
+        
         if(type === 'risupreset'){
-            downloadFile(pres.name + "_preset.risupreset", buf)
+            const buf2 = await encodeRPack(buf)
+            downloadFile(pres.name + "_preset.risup", buf2)
         }
         else{
             return {
@@ -1386,14 +1414,18 @@ export async function importPreset(f:{
     data:Uint8Array
 }|null = null){
     if(!f){
-        f = await selectSingleFile(["json", "preset", "risupreset"])
+        f = await selectSingleFile(["json", "preset", "risupreset", "risup"])
     }
     if(!f){
         return
     }
     let pre:any
-    if(f.name.endsWith('.risupreset')){
-        const decoded = await decodeMsgpack(fflate.decompressSync(f.data))
+    if(f.name.endsWith('.risupreset') || f.name.endsWith('.risup')){
+        let data = f.data
+        if(f.name.endsWith('.risup')){
+            data = await decodeRPack(data)
+        }
+        const decoded = await decodeMsgpack(fflate.decompressSync(data))
         console.log(decoded)
         if((decoded.presetVersion === 0 || decoded.presetVersion === 2) && decoded.type === 'preset'){
             pre = {...presetTemplate,...decodeMsgpack(Buffer.from(await decryptBuffer(decoded.preset ?? decoded.pres, 'risupreset')))}
