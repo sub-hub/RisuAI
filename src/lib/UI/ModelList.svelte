@@ -56,6 +56,8 @@
                     <button class="p-2 hover:text-green-500" on:click={() => {changeModel('gpt4o-2024-05-13')}}>GPT-4o 20240513</button>
                     <button class="p-2 hover:text-green-500" on:click={() => {changeModel('gpt4o-2024-08-06')}}>GPT-4o 20240806</button>
                     <button class="p-2 hover:text-green-500" on:click={() => {changeModel('gpt4o-chatgpt')}}>GPT-4o ChatGPT</button>
+                    <button class="p-2 hover:text-green-500" on:click={() => {changeModel('gpt4o1-preview')}}>o1 Preview</button>
+                    <button class="p-2 hover:text-green-500" on:click={() => {changeModel('gpt4o1-mini')}}>o1 Mini</button>
                 {/if}
             </Arcodion>
             <Arcodion name="Anthropic Claude">
@@ -105,6 +107,7 @@
             </Arcodion>
             <Arcodion name="Google Gemini">
                 <button class="hover:bg-selected px-6 py-2 text-lg" on:click={() => {changeModel('gemini-1.5-pro-exp-0827')}}>Gemini Pro 1.5 0827</button>
+                <button class="hover:bg-selected px-6 py-2 text-lg" on:click={() => {changeModel('gemini-1.5-pro-002')}}>Gemini Pro 1.5 002</button>
                 <button class="hover:bg-selected px-6 py-2 text-lg" on:click={() => {changeModel('gemini-1.5-pro-latest')}}>Gemini Pro 1.5</button>
                 <button class="hover:bg-selected px-6 py-2 text-lg" on:click={() => {changeModel('gemini-1.5-flash')}}>Gemini Flash 1.5</button>
                 <button class="hover:bg-selected px-6 py-2 text-lg" on:click={() => {changeModel('gemini-pro')}}>Gemini Pro</button>
@@ -134,6 +137,10 @@
             <Arcodion name="NovelAI">
                 <button class="hover:bg-selected px-6 py-2 text-lg" on:click={() => {changeModel('novelai')}}>NovelAI Clio</button>
                 <button class="hover:bg-selected px-6 py-2 text-lg" on:click={() => {changeModel('novelai_kayra')}}>NovelAI Kayra</button>
+            </Arcodion>
+            <Arcodion name="AI21">
+                <button class="hover:bg-selected px-6 py-2 text-lg" on:click={() => {changeModel('jamba-1.5-large')}}>Jamba 1.5 Large</button>
+                <button class="hover:bg-selected px-6 py-2 text-lg" on:click={() => {changeModel('jamba-1.5-medium')}}>Jamba 1.5 Medium</button>
             </Arcodion>
             <Arcodion name="Horde">
                 {#await getHordeModels()}

@@ -4,6 +4,7 @@ import { downloadFile } from "../storage/globalApi";
 import { BufferToText, selectSingleFile } from "../util";
 import { alertError } from "../alert";
 import { isLite } from "../lite";
+import { CustomCSSStore, SafeModeStore } from "../stores";
 
 export interface ColorScheme{
     bgcolor: string;
@@ -35,8 +36,8 @@ export const defaultColorScheme: ColorScheme = {
 const colorShemes = {
     "default": defaultColorScheme,
     "light": {
-        bgcolor: "#f0f0f0",
-        darkbg: "#ffffff",
+        bgcolor: "#ffffff",
+        darkbg: "#f0f0f0",
         borderc: "#0f172a",
         selected: "#e0e0e0",
         draculared: "#ff5555",
@@ -179,7 +180,8 @@ export async function importColorScheme(){
     
     }
 }
-export function updateTextTheme(){
+
+export function updateTextThemeAndCSS(){
     let db = get(DataBase)
     const root = document.querySelector(':root') as HTMLElement;
     if(!root){
@@ -249,5 +251,12 @@ export function updateTextTheme(){
             root.style.setProperty('--risu-font-family', db.customFont);
             break
         }
+    }
+
+    if(!get(SafeModeStore)){
+        CustomCSSStore.set(db.customCSS ?? '')
+    }
+    else{
+        CustomCSSStore.set('')
     }
 }

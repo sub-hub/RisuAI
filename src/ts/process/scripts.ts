@@ -5,7 +5,7 @@ import { downloadFile } from "../storage/globalApi";
 import { alertError, alertNormal } from "../alert";
 import { language } from "src/lang";
 import { selectSingleFile } from "../util";
-import { assetRegex, risuChatParser as risuChatParserOrg, type simpleCharacterArgument } from "../parser";
+import { assetRegex, type CbsConditions, risuChatParser as risuChatParserOrg, type simpleCharacterArgument } from "../parser";
 import { runCharacterJS } from "../plugins/embedscript";
 import { getModuleAssets, getModuleRegexScripts } from "./modules";
 import { HypaProcesser } from "./memory/hypamemory";
@@ -22,8 +22,8 @@ type pScript = {
     actions: string[]
 }
 
-export async function processScript(char:character|groupChat, data:string, mode:ScriptMode){
-    return (await processScriptFull(char, data, mode)).data
+export async function processScript(char:character|groupChat, data:string, mode:ScriptMode, cbsConditions:CbsConditions = {}){
+    return (await processScriptFull(char, data, mode, -1, cbsConditions)).data
 }
 
 export function exportRegex(s?:customscript[]){
@@ -66,7 +66,7 @@ export async function importRegex(o?:customscript[]):Promise<customscript[]>{
 
 let bestMatchCache = new Map<string, string>()
 
-export async function processScriptFull(char:character|groupChat|simpleCharacterArgument, data:string, mode:ScriptMode, chatID = -1){
+export async function processScriptFull(char:character|groupChat|simpleCharacterArgument, data:string, mode:ScriptMode, chatID = -1, cbsConditions:CbsConditions = {}){
     let db = get(DataBase)
     let emoChanged = false
     const scripts = (db.globalscript ?? []).concat(char.customscript).concat(getModuleRegexScripts())
@@ -93,24 +93,24 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
             if(outScript.startsWith('@@move_top') || outScript.startsWith('@@move_bottom') || pscript.actions.includes('move_top') || pscript.actions.includes('move_bottom')){
                 flag = flag.replace('g', '') //temperary fix
             }
+            if(outScript.endsWith('>') && !pscript.actions.includes('no_end_nl')){
+                outScript += '\n'
+            }
+            //remove unsupported flag
+            flag = flag.trim().replace(/[^dgimsuvy]/g, '')
 
+            //remove repeated flags
+            flag = flag.split('').filter((v, i, a) => a.indexOf(v) === i).join('')
+            
             if(flag.length === 0){
                 flag = 'u'
             }
 
             let input = script.in
-            if(input.startsWith('/')){
-                input = input.substring(1)
-                const rflags = input.slice(input.lastIndexOf('/') + 1)
-                flag = rflags 
-                input = input.substring(0, input.lastIndexOf('/'))
-            }
             if(pscript.actions.includes('cbs')){
-                input = risuChatParser(input, { chatID: chatID })
+                input = risuChatParser(input, { chatID: chatID, cbsConditions })
             }
 
-            //remove unsupported flag
-            flag = flag.replace(/[^gimuy]/g, '')
             const reg = new RegExp(input, flag)
             if(outScript.startsWith('@@') || pscript.actions.length > 0){
                 if(reg.test(data)){
@@ -150,7 +150,6 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
                         const matchAll = isGlobal ? data.matchAll(reg) : [data.match(reg)]
                         data = data.replace(reg, "")
                         for(const matched of matchAll){
-                            console.log(matched)
                             if(matched){
                                 const inData = matched[0]
                                 let out = outScript.replace('@@move_top ', '').replace('@@move_bottom ', '')
@@ -169,7 +168,6 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
                                         }
                                         return v
                                     })
-                                console.log(out)
                                 if(outScript.startsWith('@@move_top') || pscript.actions.includes('move_top')){
                                     data = out + '\n' +data
                                 }
@@ -180,7 +178,7 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
                         }
                     }
                     else{
-                        data = risuChatParser(data.replace(reg, outScript), { chatID: chatID })
+                        data = risuChatParser(data.replace(reg, outScript), { chatID: chatID, cbsConditions })
                     }
                 }
                 else{
@@ -188,7 +186,7 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
                         const v = outScript.split(' ', 2)[1]
                         const selchar = db.characters[get(selectedCharID)]
                         const chat = selchar.chats[selchar.chatPage]
-                        let lastChat = selchar.firstMsgIndex === -1 ? selchar.firstMessage : selchar.alternateGreetings[selchar.firstMsgIndex]
+                        let lastChat = chat.fmIndex === -1 ? selchar.firstMessage : selchar.alternateGreetings[chat.fmIndex]
                         let pointer = chatID - 1
                         while(pointer >= 0){
                             if(chat.message[pointer].role === chat.message[chatID].role){
@@ -223,7 +221,7 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
                 }
             }
             else{
-                data = risuChatParser(data.replace(reg, outScript), { chatID: chatID })
+                data = risuChatParser(data.replace(reg, outScript), { chatID: chatID, cbsConditions })
             }
         }
     }
@@ -263,13 +261,15 @@ export async function processScriptFull(char:character|groupChat|simpleCharacter
         })
     }
 
-    console.log(parsedScripts)
-
     if(orderChanged){
         parsedScripts.sort((a, b) => b.order - a.order) //sort by order
     }
     for (const script of parsedScripts){
-        executeScript(script)
+        try {
+            executeScript(script)            
+        } catch (error) {
+            console.error(error)
+        }
     }
 
     

@@ -9,10 +9,10 @@ import {open} from '@tauri-apps/api/shell'
 import { DataBase, loadedStore, setDatabase, type Database, defaultSdDataFunc } from "./database";
 import { appWindow } from "@tauri-apps/api/window";
 import { checkRisuUpdate } from "../update";
-import { botMakerMode, selectedCharID } from "../stores";
+import { MobileGUI, botMakerMode, selectedCharID } from "../stores";
 import { Body, ResponseType, fetch as TauriFetch } from "@tauri-apps/api/http";
 import { loadPlugins } from "../plugins/plugins";
-import { alertConfirm, alertError, alertNormal, alertNormalWait, alertSelect, alertTOS } from "../alert";
+import { alertConfirm, alertError, alertNormal, alertNormalWait, alertSelect, alertTOS, alertWait } from "../alert";
 import { checkDriverInit, syncDrive } from "../drive/drive";
 import { hasher } from "../parser";
 import { characterURLImport, hubURL } from "../characterCards";
@@ -21,7 +21,7 @@ import { loadRisuAccountData } from "../drive/accounter";
 import { decodeRisuSave, encodeRisuSave } from "./risuSave";
 import { AutoStorage } from "./autoStorage";
 import { updateAnimationSpeed } from "../gui/animation";
-import { updateColorScheme, updateTextTheme } from "../gui/colorscheme";
+import { updateColorScheme, updateTextThemeAndCSS } from "../gui/colorscheme";
 import { saveDbKei } from "../kei/backup";
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import * as CapFS from '@capacitor/filesystem'
@@ -35,6 +35,7 @@ import { removeDefaultHandler } from "src/main";
 import { updateGuisize } from "../gui/guisize";
 import { encodeCapKeySafe } from "./mobileStorage";
 import { updateLorebooks } from "../characters";
+import { initMobileGesture } from "../hotkey";
 
 //@ts-ignore
 export const isTauri = !!window.__TAURI__
@@ -42,6 +43,7 @@ export const isTauri = !!window.__TAURI__
 export const isNodeServer = !!globalThis.__NODE__
 export const forageStorage = new AutoStorage()
 export const googleBuild = false
+export const isMobile = navigator.userAgent.match(/(iPad)|(iPhone)|(iPod)|(android)|(webOS)/i)
 
 interface fetchLog{
     body:string
@@ -298,8 +300,8 @@ export async function saveDb(){
             }
             if(!gotChannel){
                 gotChannel = true
-                await alertNormalWait(language.activeTabChange)
-                gotChannel = false
+                alertWait(language.activeTabChange)
+                location.reload()
             }
         }
     }
@@ -522,16 +524,29 @@ export async function loadData() {
                     await loadRisuAccountData()                    
                 } catch (error) {}
             }
+            try {
+                //@ts-ignore
+                const isInStandaloneMode = (window.matchMedia('(display-mode: standalone)').matches) || (window.navigator.standalone) || document.referrer.includes('android-app://');              
+                if(isInStandaloneMode){
+                    await navigator.storage.persist()
+                }
+            } catch (error) {
+                
+            }
             await checkNewFormat()
             const db = get(DataBase);
             updateColorScheme()
-            updateTextTheme()
+            updateTextThemeAndCSS()
             updateAnimationSpeed()
             updateHeightMode()
             updateErrorHandling()
             updateGuisize()
             if(db.botSettingAtStart){
                 botMakerMode.set(true)
+            }
+            if((db.betaMobileGUI && window.innerWidth <= 800) || import.meta.env.VITE_RISU_LITE === 'TRUE'){
+                initMobileGesture()
+                MobileGUI.set(true)
             }
             loadedStore.set(true)
             selectedCharID.set(-1)

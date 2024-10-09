@@ -21,6 +21,8 @@ import { runTransformers } from "./transformers";
 import {createParser} from 'eventsource-parser'
 import {Ollama} from 'ollama/dist/browser.mjs'
 import { applyChatTemplate } from "./templates/chatTemplate";
+import { OobaParams } from "./prompt";
+import { extractJSON, getOpenAIJSONSchema } from "./templates/jsonSchema";
 
 
 
@@ -234,6 +236,10 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
         case 'gpt4om-2024-07-18':
         case 'gpt4o-2024-08-06':
         case 'gpt4o-chatgpt':
+        case 'gpt4o1-preview':
+        case 'gpt4o1-mini':
+        case 'jamba-1.5-large':
+        case 'jamba-1.5-medium':
         case 'reverse_proxy':{
             let formatedChat:OpenAIChatExtra[] = []
             for(let i=0;i<formated.length;i++){
@@ -297,6 +303,15 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                 formatedChat = formatedChat.filter(m => {
                     return m.content !== ''
                 })
+            }
+
+            if(aiModel.startsWith('gpt4o1')){
+                for(let i=0;i<formatedChat.length;i++){
+                    if(formatedChat[i].role === 'system'){
+                        formatedChat[i].content = `<system>${formatedChat[i].content}</system>`
+                        formatedChat[i].role = 'user'
+                    }
+                }
             }
 
             for(let i=0;i<biasString.length;i++){
@@ -481,18 +496,21 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                     : requestModel === 'gpt4om-2024-07-18' ? 'gpt-4o-mini-2024-07-18'
                     : requestModel === 'gpt4o-2024-08-06' ? 'gpt-4o-2024-08-06'
                     : requestModel === 'gpt4o-chatgpt' ? 'chatgpt-4o-latest'
+                    : requestModel === 'gpt4o1-preview' ? 'o1-preview'
+                    : requestModel === 'gpt4o1-mini' ? 'o1-mini'
                     : (!requestModel) ? 'gpt-3.5-turbo'
                     : requestModel,
                 messages: formatedChat,
-                // temperature: temperature,
                 max_tokens: maxTokens,
-                // presence_penalty: arg.PresensePenalty || (db.PresensePenalty / 100),
-                // frequency_penalty: arg.frequencyPenalty || (db.frequencyPenalty / 100),
                 logit_bias: bias,
                 stream: false,
-                // top_p: db.top_p,
 
             })
+
+            if(aiModel.startsWith('gpt4o1')){
+                body.max_completion_tokens = body.max_tokens
+                delete body.max_tokens
+            }
 
             if(db.generationSeed > 0){
                 body.seed = db.generationSeed
@@ -500,6 +518,13 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
 
             if(db.putUserOpen){
                 body.user = getOpenUserString()
+            }
+
+            if(db.jsonSchemaEnabled){
+                body.response_format = {
+                    "type": "json_schema",
+                    "json_schema": getOpenAIJSONSchema()
+                }
             }
 
             if(aiModel === 'openrouter'){
@@ -590,6 +615,10 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
             if(risuIdentify){
                 headers["X-Proxy-Risu"] = 'RisuAI'
             }
+            if(aiModel.startsWith('jamba')){
+                headers['Authorization'] = 'Bearer ' + db.ai21Key
+                replacerURL = 'https://api.ai21.com/studio/v1/chat/completions'
+            }
             if(multiGen){
                 // @ts-ignore
                 body.n = db.genTime
@@ -640,6 +669,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                 const transtream = new TransformStream<Uint8Array, StreamResponseChunk>(  {
                     async transform(chunk, control) {
                         dataUint = Buffer.from(new Uint8Array([...dataUint, ...chunk]))
+                        let JSONreaded:{[key:string]:string} = {}
                         try {
                             const datas = dataUint.toString().split('\n')
                             let readed:{[key:string]:string} = {}
@@ -648,7 +678,17 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                                     try {
                                         const rawChunk = data.replace("data: ", "")
                                         if(rawChunk === "[DONE]"){
-                                            control.enqueue(readed)
+                                            if(db.extractJson && db.jsonSchemaEnabled){
+                                                for(const key in readed){
+                                                    const extracted = extractJSON(readed[key], db.extractJson)
+                                                    JSONreaded[key] = extracted
+                                                }
+                                                console.log(JSONreaded)
+                                                control.enqueue(JSONreaded)
+                                            }
+                                            else{
+                                                control.enqueue(readed)
+                                            }
                                             return
                                         }
                                         const choices = JSON.parse(rawChunk).choices
@@ -673,7 +713,17 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                                     } catch (error) {}
                                 }
                             }
-                            control.enqueue(readed)
+                            if(db.extractJson && db.jsonSchemaEnabled){
+                                for(const key in readed){
+                                    const extracted = extractJSON(readed[key], db.extractJson)
+                                    JSONreaded[key] = extracted
+                                }
+                                console.log(JSONreaded)
+                                control.enqueue(JSONreaded)
+                            }
+                            else{
+                                control.enqueue(readed)
+                            }
                         } catch (error) {
                             
                         }
@@ -740,6 +790,21 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
             if(res.ok){
                 try {
                     if(multiGen && dat.choices){
+                        if(db.extractJson && db.jsonSchemaEnabled){
+
+                            const c = dat.choices.map((v:{
+                                message:{content:string}
+                            }) => {
+                                const extracted = extractJSON(v.message.content, db.extractJson)
+                                return ["char",extracted]
+                            })
+
+                            return {
+                                type: 'multiline',
+                                result: c
+                            }
+
+                        }
                         return {
                             type: 'multiline',
                             result: dat.choices.map((v) => {
@@ -750,9 +815,31 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                     }
 
                     if(dat?.choices[0]?.text){
+                        if(db.extractJson && db.jsonSchemaEnabled){
+                            try {
+                                const parsed = JSON.parse(dat.choices[0].text)
+                                const extracted = extractJSON(parsed, db.extractJson)
+                                return {
+                                    type: 'success',
+                                    result: extracted
+                                }
+                            } catch (error) {
+                                console.log(error)
+                                return {
+                                    type: 'success',
+                                    result: dat.choices[0].text
+                                }
+                            }
+                        }
                         return {
                             type: 'success',
                             result: dat.choices[0].text
+                        }
+                    }
+                    if(db.extractJson && db.jsonSchemaEnabled){
+                        return {
+                            type: 'success',
+                            result:  extractJSON(dat.choices[0].message.content, db.extractJson)
                         }
                     }
                     const msg:OpenAIChatFull = (dat.choices[0].message)
@@ -1076,7 +1163,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
             const OobaBodyTemplate = db.reverseProxyOobaArgs
             const keys = Object.keys(OobaBodyTemplate)
             for(const key of keys){
-                if(OobaBodyTemplate[key] !== undefined && OobaBodyTemplate[key] !== null){
+                if(OobaBodyTemplate[key] !== undefined && OobaBodyTemplate[key] !== null && OobaParams.includes(key)){
                     bodyTemplate[key] = OobaBodyTemplate[key]
                 }
                 else if(bodyTemplate[key]){
@@ -1200,6 +1287,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
         case 'gemini-1.5-pro-exp-0801':
         case 'gemini-1.5-pro-exp-0827':
         case 'gemini-1.5-flash':
+        case 'gemini-1.5-pro-002':
         case 'gemini-ultra':
         case 'gemini-ultra-vision':{
             interface GeminiPart{

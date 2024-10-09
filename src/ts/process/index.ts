@@ -17,10 +17,9 @@ import { groupOrder } from "./group";
 import { runTrigger } from "./triggers";
 import { HypaProcesser } from "./memory/hypamemory";
 import { additionalInformations } from "./embedding/addinfo";
-import { cipherChat, decipherChat } from "./cipherChat";
 import { getInlayImage, supportsInlayImage } from "./files/image";
 import { getGenerationModelString } from "./models/modelString";
-import { sendPeerChar } from "../sync/multiuser";
+import { connectionOpen, peerRevertChat, peerSafeCheck, peerSync } from "../sync/multiuser";
 import { runInlayScreen } from "./inlayScreen";
 import { runCharacterJS } from "../plugins/embedscript";
 import { addRerolls } from "./prereroll";
@@ -108,9 +107,24 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
     doingChat.set(true)
 
+    if(connectionOpen){
+        chatProcessStage.set(4)
+        const peerSafe = await peerSafeCheck()
+        if(!peerSafe){
+            peerRevertChat()
+            doingChat.set(false)
+            alertError(language.otherUserRequesting)
+            return false
+        }
+        await peerSync()
+        chatProcessStage.set(0)
+    }
+
     let db = get(DataBase)
+    db.statics.messages += 1
     let selectedChar = get(selectedCharID)
     const nowChatroom = db.characters[selectedChar]
+    nowChatroom.lastInteraction = Date.now()
     let selectedChat = nowChatroom.chatPage
     nowChatroom.chats[nowChatroom.chatPage].message = nowChatroom.chats[nowChatroom.chatPage].message.map((v) => {
         v.chatId = v.chatId ?? v4()
@@ -598,7 +612,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     if(nowChatroom.type !== 'group'){
-        const firstMsg = nowChatroom.firstMsgIndex === -1 ? nowChatroom.firstMessage : nowChatroom.alternateGreetings[nowChatroom.firstMsgIndex]
+        const firstMsg = currentChat.fmIndex === -1 ? nowChatroom.firstMessage : nowChatroom.alternateGreetings[currentChat.fmIndex]
 
         const chat:OpenAIChat = {
             role: 'assistant',
@@ -630,7 +644,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
     let index = 0
     for(const msg of ms){
-        let formatedChat = await processScript(nowChatroom,risuChatParser(msg.data, {chara: currentChar, role: msg.role}), 'editprocess')
+        let formatedChat = await processScript(nowChatroom,risuChatParser(msg.data, {chara: currentChar, role: msg.role}), 'editprocess', {
+            chatRole: msg.role,
+        })
         let name = ''
         if(msg.role === 'char'){
             if(msg.saying){
@@ -683,10 +699,25 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
 
         let attr:string[] = []
+        let role:'user'|'assistant'|'system' = msg.role === 'user' ? 'user' : 'assistant'
 
-        if(nowChatroom.type === 'group' || (usingPromptTemplate && db.promptSettings.sendName)){
-            formatedChat = name + ': ' + formatedChat
-            attr.push('nameAdded')
+        if(
+            (nowChatroom.type === 'group' && findCharacterbyIdwithCache(msg.saying).chaId !== currentChar.chaId) ||
+            (nowChatroom.type === 'group' && db.groupOtherBotRole === 'assistant') ||
+            (usingPromptTemplate && db.promptSettings.sendName)
+        ){
+            const form = db.groupTemplate || `<{{char}}\'s Message>\n{{slot}}\n</{{char}}\'s Message>`
+            formatedChat = risuChatParser(form, {chara: findCharacterbyIdwithCache(msg.saying).name}).replace('{{slot}}', formatedChat)
+            switch(db.groupOtherBotRole){
+                case 'user':
+                case 'assistant':
+                case 'system':
+                    role = db.groupOtherBotRole
+                    break
+                default:
+                    role = 'assistant'
+                    break
+            }
         }
         if(usingPromptTemplate && db.promptSettings.maxThoughtTagDepth !== -1){
             const depth = ms.length - index
@@ -696,7 +727,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
 
         const chat:OpenAIChat = {
-            role: msg.role === 'user' ? 'user' : 'assistant',
+            role: role,
             content: formatedChat,
             memo: msg.chatId,
             attr: attr,
@@ -709,6 +740,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         currentTokens += await tokenizer.tokenizeChat(chat)
         index++
     }
+    console.log(JSON.stringify(chats, null, 2))
 
     const depthPrompts = lorepmt.actives.filter(v => {
         return (v.pos === 'depth' && v.depth > 0) || v.pos === 'reverse_depth'
@@ -786,7 +818,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     }
 
     let biases:[string,number][] = db.bias.concat(currentChar.bias).map((v) => {
-        return [risuChatParser(v[0].replaceAll("\\n","\n"), {chara: currentChar}),v[1]]
+        return [risuChatParser(v[0].replaceAll("\\n","\n").replaceAll("\\r","\r").replaceAll("\\\\","\\"), {chara: currentChar}),v[1]]
     })
 
     let memories:OpenAIChat[] = []
@@ -1034,10 +1066,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         return v
     })
 
-    if(db.cipherChat){
-        formated = cipherChat(formated)
-    }
-
 
     if(currentChar.depth_prompt && currentChar.depth_prompt.prompt && currentChar.depth_prompt.prompt.length > 0){
         //depth_prompt
@@ -1152,9 +1180,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 if(!result){
                     result = ''
                 }
-                if(db.cipherChat){
-                    result = decipherChat(result)
-                }
                 if(db.removeIncompleteResponse){
                     result = trimUntilPunctuation(result)
                 }
@@ -1205,9 +1230,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         for(let i=0;i<msgs.length;i++){
             let msg = msgs[i]
             let mess = msg[1]
-            if(db.cipherChat){
-                mess = decipherChat(result)
-            }
             let msgIndex = db.characters[selectedChar].chats[selectedChat].message.length
             let result2 = await processScriptFull(nowChatroom, reformatContent(mess), 'editoutput', msgIndex)
             if(i === 0 && arg.continue){
@@ -1307,7 +1329,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
     chatProcessStage.set(4)
 
-    sendPeerChar()
+    peerSync()
 
     if(req.special){
         if(req.special.emotion){

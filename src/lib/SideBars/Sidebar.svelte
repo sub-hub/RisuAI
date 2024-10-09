@@ -29,9 +29,8 @@
     WrenchIcon,
   } from "lucide-svelte";
     import {
-    characterFormatUpdate,
-    createNewCharacter,
-    createNewGroup,
+  addCharacter,
+    changeChar,
     getCharImage,
   } from "../../ts/characters";
     import { importCharacter } from "src/ts/characterCards";
@@ -51,7 +50,7 @@
     import Button from "../UI/GUI/Button.svelte";
     import { alertAddCharacter, alertInput, alertSelect } from "src/ts/alert";
     import SideChatList from "./SideChatList.svelte";
-    import { joinMultiuserRoom } from "src/ts/sync/multiuser";
+    import { ConnectionIsHost, ConnectionOpenStore, joinMultiuserRoom, RoomIdStore } from "src/ts/sync/multiuser";
   import { sideBarSize } from "src/ts/gui/guisize";
   import DevTool from "./DevTool.svelte";
   let sideBarMode = 0;
@@ -59,40 +58,6 @@
   let menuMode = 0;
   let devTool = false
   export let openGrid = () => {};
-
-  function createScratch() {
-    reseter();
-    createNewCharacter();
-    let db = get(DataBase)
-    if(db.characters[db.characters.length-1]){
-        changeChar(db.characters.length-1)
-    }
-  }
-  function createGroup() {
-    reseter();
-    createNewGroup();
-    let db = get(DataBase)
-    if(db.characters[db.characters.length-1]){
-        changeChar(db.characters.length-1)
-    }
-  }
-  async function createImport() {
-    reseter();
-    await importCharacter();
-    let db = get(DataBase)
-    if(db.characters[db.characters.length-1]){
-        changeChar(db.characters.length-1)
-    }
-  }
-
-  function changeChar(index: number) {
-    if($doingChat){
-      return
-    }
-    reseter();
-    characterFormatUpdate(index);
-    selectedCharID.set(index);
-  }
 
   function reseter() {
     menuMode = 0;
@@ -337,7 +302,7 @@
 </script>
 
 <div
-  class="h-full w-20 min-w-20 flex-col items-center bg-bgcolor text-textcolor shadow-lg relative"
+  class="h-full w-20 min-w-20 flex-col items-center bg-bgcolor text-textcolor shadow-lg relative rs-sidebar"
   class:editMode
   class:risu-sub-sidebar={$sideBarClosing}
   class:risu-sub-sidebar-close={$sideBarClosing}
@@ -424,13 +389,13 @@
         <div
             on:click={() => {
               if(char.type === "normal"){
-                changeChar(char.index);
+                changeChar(char.index, {reseter});
               }
             }}
             on:keydown={(e) => {
               if (e.key === "Enter") {
                 if(char.type === "normal"){
-                  changeChar(char.index);
+                  changeChar(char.index, {reseter});
                 }
               }
             }}
@@ -535,13 +500,13 @@
               <div
                   on:click={() => {
                     if(char2.type === "normal"){
-                      changeChar(char2.index);
+                      changeChar(char2.index, {reseter});
                     }
                   }}
                   on:keydown={(e) => {
                     if (e.key === "Enter") {
                       if(char2.type === "normal"){
-                        changeChar(char2.index);
+                        changeChar(char2.index, {reseter});
                       }
                     }
                   }}
@@ -585,22 +550,7 @@
     <div class="flex flex-col items-center space-y-2 px-2">
       <BaseRoundedButton
         onClick={async () => {
-          const r = await alertAddCharacter()
-          switch(r){
-            case 'createfromScratch':
-              createScratch()
-              break
-            case 'importCharacter':
-              createImport()
-              break
-            case 'createGroup':
-              createGroup()
-              break
-            case 'importFromRealm':
-              selectedCharID.set(-1)
-              OpenRealmStore.set(true)
-              break
-          }
+          addCharacter({reseter}) 
         }}
         ><svg viewBox="0 0 24 24" width="1.2em" height="1.2em"
           ><path
@@ -659,6 +609,22 @@
       </div>
     {:else if $CurrentCharacter?.chaId === '§playground'}
       <SideChatList bind:chara={ $CurrentCharacter} />
+    {:else if $ConnectionOpenStore}
+      <div class="flex flex-col">
+        <h1 class="text-xl">{language.connectionOpen}</h1>
+        <span class="text-textcolor2 mb-4">{language.connectionOpenInfo}</span>
+        <div class="flex">
+          <span>ID: </span>
+          <span class="text-blue-600">{$RoomIdStore}</span>
+        </div>
+        <div>
+          {#if $ConnectionIsHost}
+            <span class="text-emerald-600">{language.connectionHost}</span>
+          {:else}
+            <span class="text-gray-500">{language.connectionGuest}</span>
+          {/if}
+        </div>
+      </div>
     {:else}
       <div class="w-full h-8 min-h-8 border-l border-b border-r border-selected relative bottom-6 rounded-b-md flex">
         <button on:click={() => {
@@ -685,38 +651,6 @@
         <SideChatList bind:chara={ $CurrentCharacter} />
       {/if}
     {/if}
-  {:else if sideBarMode === 1}
-    <Button
-      on:click={createScratch}
-      className="mt-2"
-    >
-      {language.createfromScratch}
-    </Button>
-    <Button
-      on:click={createImport}
-      className="mt-2"
-    >
-      {language.importCharacter}
-    </Button>
-    <Button
-      on:click={createGroup}
-      className="mt-2"
-    >
-      {language.createGroup}
-    </Button>
-    <Button
-      on:click={BotCreator.createBotFromWeb}
-      className="mt-2"
-    >
-      {language.createBotwithAI}
-    </Button>
-  {:else if sideBarMode === 2}
-    <Button
-      on:click={joinMultiuserRoom}
-      className="mt-2"
-    >
-      {language.joinMultiUserRoom}
-    </Button>
   {/if}
 </div>
 

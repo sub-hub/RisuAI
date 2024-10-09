@@ -1,6 +1,6 @@
 export const DataBase = writable({} as any as Database)
 export const loadedStore = writable(false)
-export let appVer = "128.0.1"
+export let appVer = "135.0.0"
 export let webAppSubVer = ''
 
 import { get, writable } from 'svelte/store';
@@ -435,6 +435,15 @@ export function setDatabase(data:Database){
     data.translatorInputLanguage ??= 'auto'
     data.falModel ??= 'fal-ai/flux/dev'
     data.falLoraScale ??= 1
+    data.customCSS ??= ''
+    data.strictJsonSchema ??= true
+    data.statics ??= {
+        messages: 0,
+        imports: 0
+    }
+    data.customQuotes ??= false
+    data.customQuotesData ??= ['“','”','‘','’']
+    data.groupOtherBotRole ??= 'user'
     changeLanguage(data.language)
     DataBase.set(data)
 }
@@ -727,6 +736,21 @@ export interface Database{
     falLoraName: string
     falLoraScale: number
     moduleIntergration: string
+    customCSS: string
+    betaMobileGUI:boolean
+    jsonSchemaEnabled:boolean
+    jsonSchema:string
+    strictJsonSchema:boolean
+    extractJson:string
+    ai21Key:string
+    statics: {
+        messages: number
+        imports: number
+    }
+    customQuotes:boolean
+    customQuotesData?:[string, string, string, string]
+    groupTemplate?:string
+    groupOtherBotRole?:string
 }
 
 export interface customscript{
@@ -880,6 +904,8 @@ export interface character{
     defaultVariables?:string
     lowLevelAccess?:boolean
     hideChatIcon?:boolean
+    lastInteraction?:number
+    translatorNote?:string
 }
 
 
@@ -928,6 +954,7 @@ export interface groupChat{
     defaultVariables?:string
     lowLevelAccess?:boolean
     hideChatIcon?:boolean
+    lastInteraction?:number
 }
 
 export interface botPreset{
@@ -981,6 +1008,12 @@ export interface botPreset{
     top_k?:number
     instructChatTemplate?:string
     JinjaTemplate?:string
+    jsonSchemaEnabled?:boolean
+    jsonSchema?:string
+    strictJsonSchema?:boolean
+    extractJson?:string
+    groupTemplate?:string
+    groupOtherBotRole?:string
 }
 
 
@@ -1051,6 +1084,7 @@ export interface Chat{
     modules?:string[]
     id?:string
     bindedPersona?:string
+    fmIndex?:number
 }
 
 export interface Message{
@@ -1060,6 +1094,8 @@ export interface Message{
     chatId?:string
     time?: number
     generationInfo?: MessageGenerationInfo
+    name?:string
+    otherUser?:boolean
 }
 
 export interface MessageGenerationInfo{
@@ -1082,7 +1118,7 @@ interface AINsettings{
     top_k:number
 }
 
-interface OobaSettings{
+export interface OobaSettings{
     max_new_tokens: number,
     do_sample: boolean,
     temperature: number,
@@ -1263,7 +1299,13 @@ export function saveCurrentPreset(){
         moduleIntergration: db.moduleIntergration ?? "",
         top_k: db.top_k,
         instructChatTemplate: db.instructChatTemplate,
-        JinjaTemplate: db.JinjaTemplate ?? ''
+        JinjaTemplate: db.JinjaTemplate ?? '',
+        jsonSchemaEnabled:db.jsonSchemaEnabled??false,
+        jsonSchema:db.jsonSchema ?? '',
+        strictJsonSchema:db.strictJsonSchema ?? true,
+        extractJson:db.extractJson ?? '',
+        groupOtherBotRole: db.groupOtherBotRole ?? 'user',
+        groupTemplate: db.groupTemplate ?? '',
     }
     db.botPresets = pres
     setDatabase(db)
@@ -1352,6 +1394,12 @@ export function setPreset(db:Database, newPres: botPreset){
     db.top_k = newPres.top_k ?? db.top_k
     db.instructChatTemplate = newPres.instructChatTemplate ?? db.instructChatTemplate
     db.JinjaTemplate = newPres.JinjaTemplate ?? db.JinjaTemplate
+    db.jsonSchemaEnabled = newPres.jsonSchemaEnabled ?? false
+    db.jsonSchema = newPres.jsonSchema ?? ''
+    db.strictJsonSchema = newPres.strictJsonSchema ?? true
+    db.extractJson = newPres.extractJson ?? ''
+    db.groupOtherBotRole = newPres.groupOtherBotRole ?? 'user'
+    db.groupTemplate = newPres.groupTemplate ?? ''
     return db
 }
 
