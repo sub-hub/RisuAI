@@ -326,7 +326,13 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
                 node.textContent = translated;
                 return;
             }
-            
+
+            if(translated!==node.textContent){
+                // translated+= '\n'
+                // translated += node.textContent;
+                translated=node.textContent+'\n'+translated;
+            }
+
             const { data: processedTranslated } = await processScriptFull(
                 alwaysExistChar,
                 translated,
@@ -414,6 +420,12 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
         }
     }
     
+    // Start translation from the body element
+    await translateNode(dom.body);
+    
+    await translateTranslationChunks(true, 0)
+    
+    await Promise.all(promises)
     const li=dom.body.getElementsByTagName('li')
     // set all font color to var(--FontColorStandard)
     for(const l of li){
@@ -424,12 +436,6 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
         l.style.fontFamily='ridibatang'
         l.style.lineHeight='1.5em'
     }
-    // Start translation from the body element
-    await translateNode(dom.body);
-
-    await translateTranslationChunks(true, 0)
-
-    await Promise.all(promises)
     // Serialize the DOM back to HTML
     const serializer = new XMLSerializer();
     let translatedHTML = serializer.serializeToString(dom);
