@@ -1,16 +1,15 @@
 import { get } from "svelte/store"
 import { translatorPlugin } from "../plugins/plugins"
-import { DataBase, type character, type customscript, type groupChat } from "../storage/database"
-import { globalFetch, isTauri } from "../storage/globalApi"
+import { getDatabase, type character, type customscript, type groupChat } from "../storage/database.svelte"
+import { globalFetch, isTauri } from "../globalApi.svelte"
 import { alertError } from "../alert"
 import { requestChatData } from "../process/request"
-import { doingChat, type OpenAIChat } from "../process"
-import { applyMarkdownToNode, parseChatML, type simpleCharacterArgument } from "../parser"
-import { selectedCharID } from "../stores"
+import { doingChat, type OpenAIChat } from "../process/index.svelte"
+import { applyMarkdownToNode, parseChatML, type simpleCharacterArgument } from "../parser.svelte"
+import { selectedCharID } from "../stores.svelte"
 import { getModuleRegexScripts } from "../process/modules"
 import { getNodetextToSentence, isKoreanSentence, sleep } from "../util"
 import { processScriptFull } from "../process/scripts"
-import { Capacitor } from "@capacitor/core"
 
 let cache={
     origin: [''],
@@ -20,7 +19,7 @@ let cache={
 let waitTrans = 0
 
 export async function translate(text:string, reverse:boolean) {
-    let db = get(DataBase)
+    let db = getDatabase()
     const plug = await translatorPlugin(text, reverse ? db.translator: 'en', reverse ? 'en' : db.translator)
     if(plug){
         return plug.content
@@ -105,7 +104,7 @@ export async function runTranslator(text:string, reverse:boolean, from:string,ta
 }
 
 async function translateMain(text:string, arg:{from:string, to:string, host:string}){
-    let db = get(DataBase)
+    let db = getDatabase()
     if(db.translatorType === 'llm'){
         const tr = db.translator || 'en'
         return translateLLM(text, {to: tr})
@@ -208,7 +207,7 @@ async function jaTrans(text:string) {
 }
 
 export function isExpTranslator(){
-    const db = get(DataBase)
+    const db = getDatabase()
     return db.translatorType === 'llm' || db.translatorType === 'deepl' || db.translatorType === 'deeplX'
 }
 
@@ -216,7 +215,7 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
     let alwaysExistChar: character | groupChat | simpleCharacterArgument;
     if(charArg !== ''){
         if(typeof(charArg) === 'string'){
-            const db = get(DataBase)
+            const db = getDatabase()
             const charId = get(selectedCharID)
             alwaysExistChar = db.characters[charId]
         }
@@ -232,7 +231,7 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
             chaId: 'simple'
         }
     }
-    let db = get(DataBase)
+    let db = getDatabase()
     let DoingChat = get(doingChat)
     if(DoingChat){
         if(isExpTranslator()){
@@ -462,7 +461,7 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
 }
 
 function needSuperChunkedTranslate(){
-    return get(DataBase).translatorType === 'deeplX'
+    return getDatabase().translatorType === 'deeplX'
 }
 
 let llmCache = new Map<string, string>()
@@ -477,7 +476,7 @@ async function translateLLM(text:string, arg:{to:string}){
         return `<style-data style-index="${styleDecodes.length-1}"></style-data>`
     })
 
-    const db = get(DataBase)
+    const db = getDatabase()
     const charIndex = get(selectedCharID)
     const currentChar = db.characters[charIndex]
     let translatorNote

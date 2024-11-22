@@ -6,10 +6,10 @@
     import Button from "../UI/GUI/Button.svelte";
     import { HypaProcesser } from "src/ts/process/memory/hypamemory";
 
-    let query = "";
-    let model = "MiniLM";
-    let customEmbeddingUrl = "http://127.0.0.1:7997/";
-    let data:string[] = [    "I like to eat apples in the morning.",
+    let query = $state("");
+    let model = $state("MiniLM");
+    let customEmbeddingUrl = $state("http://127.0.0.1:7997/");
+    let data:string[] = $state([    "I like to eat apples in the morning.",
     "Fruit salads with berries are delicious.",
     "banana",
     "apple pie",
@@ -20,10 +20,10 @@
     "이미 오랜지 난 옛날 얘기다",
     "fruit",
     "リンゴ",
-    "オレンジ"];
+    "オレンジ"]);
     
-    let dataresult:[string, number][] = [];
-    let running = false;
+    let dataresult:[string, number][] = $state([]);
+    let running = $state(false);
 
     const run = async () => {
         if(running) return;
@@ -54,10 +54,10 @@
 <TextInput bind:value={query} size="lg" fullwidth />
 
 <span class="text-textcolor text-lg mt-6">Data</span>
-{#each data as item}
-    <TextInput bind:value={item} size="lg" fullwidth marginBottom />
+{#each data as item, i}
+    <TextInput bind:value={data[i]} size="lg" fullwidth marginBottom />
 {/each}
-<Button styled="outlined" on:click={() => {
+<Button styled="outlined" onclick={() => {
     data.push("");
     data = data
 }}>+</Button>
@@ -73,11 +73,11 @@
     </div>
 {/each}
 
-<Button className="mt-6 flex justify-center" size="lg" on:click={() => {
+<Button className="mt-6 flex justify-center" size="lg" onclick={() => {
     run()
 }}>
     {#if running}
-        <div class="loadmove" />
+        <div class="loadmove"></div>
     {:else}
         {language.run?.toLocaleUpperCase()}
     {/if}

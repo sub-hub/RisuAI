@@ -1,15 +1,15 @@
 import { get } from "svelte/store";
-import type { MultiModal, OpenAIChat, OpenAIChatFull } from ".";
-import { DataBase, type character } from "../storage/database";
+import type { MultiModal, OpenAIChat, OpenAIChatFull } from "./index.svelte";
+import { getDatabase, type character } from "../storage/database.svelte";
 import { pluginProcess } from "../plugins/plugins";
 import { language } from "../../lang";
 import { stringlizeAINChat, stringlizeChat, getStopStrings, unstringlizeAIN, unstringlizeChat } from "./stringlize";
-import { addFetchLog, fetchNative, globalFetch, isNodeServer, isTauri, textifyReadableStream } from "../storage/globalApi";
+import { addFetchLog, fetchNative, globalFetch, isNodeServer, isTauri, textifyReadableStream } from "../globalApi.svelte";
 import { sleep } from "../util";
 import { NovelAIBadWordIds, stringlizeNAIChat } from "./models/nai";
 import { strongBan, tokenize, tokenizeNum } from "../tokenizer";
 import { runGGUFModel } from "./models/local";
-import { risuChatParser } from "../parser";
+import { risuChatParser } from "../parser.svelte";
 import { SignatureV4 } from "@smithy/signature-v4";
 import { HttpRequest } from "@smithy/protocol-http";
 import { Sha256 } from "@aws-crypto/sha256-js";
@@ -88,7 +88,7 @@ type ParameterMap = {
 };
 
 function applyParameters(data: { [key: string]: any }, parameters: Parameter[], rename: ParameterMap = {}) {
-    const db = get(DataBase)
+    const db = getDatabase()
     for(const parameter of parameters){
         let value = 0
         switch(parameter){
@@ -136,7 +136,7 @@ function applyParameters(data: { [key: string]: any }, parameters: Parameter[], 
 }
 
 export async function requestChatData(arg:requestDataArgument, model:'model'|'submodel', abortSignal:AbortSignal=null):Promise<requestDataResponse> {
-    const db = get(DataBase)
+    const db = getDatabase()
     let trys = 0
     while(true){
         const da = await requestChatDataMain(arg, model, abortSignal)
@@ -178,8 +178,8 @@ export interface OpenAIChatExtra {
 
 
 export async function requestChatDataMain(arg:requestDataArgument, model:'model'|'submodel', abortSignal:AbortSignal=null):Promise<requestDataResponse> {
-    const db = get(DataBase)
-    let formated = structuredClone(arg.formated)
+    const db = getDatabase()
+    let formated = safeStructuredClone(arg.formated)
     let maxTokens = arg.maxTokens ??db.maxResponse
     let temperature = arg.temperature ?? (db.temperature / 100)
     let bias = arg.bias
@@ -235,6 +235,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
         case 'gpt4om':
         case 'gpt4om-2024-07-18':
         case 'gpt4o-2024-08-06':
+        case 'gpt4o-2024-11-20':
         case 'gpt4o-chatgpt':
         case 'gpt4o1-preview':
         case 'gpt4o1-mini':
@@ -245,7 +246,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
             for(let i=0;i<formated.length;i++){
                 const m = formated[i]
                 if(m.multimodals && m.multimodals.length > 0 && m.role === 'user'){
-                    let v:OpenAIChatExtra = structuredClone(m)
+                    let v:OpenAIChatExtra = safeStructuredClone(m)
                     let contents:OpenAIContents[] = []
                     for(let j=0;j<m.multimodals.length;j++){
                         contents.push({
@@ -316,6 +317,12 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
 
             for(let i=0;i<biasString.length;i++){
                 const bia = biasString[i]
+                if(bia[0].startsWith('[[') && bia[0].endsWith(']]')){
+                    const num = parseInt(bia[0].replace('[[', '').replace(']]', ''))
+                    bias[num] = bia[1]
+                    continue
+                }
+
                 if(bia[1] === -101){
                     bias = await strongBan(bia[0], bias)
                     continue
@@ -495,6 +502,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                     : requestModel === 'gpt4om' ? 'gpt-4o-mini'
                     : requestModel === 'gpt4om-2024-07-18' ? 'gpt-4o-mini-2024-07-18'
                     : requestModel === 'gpt4o-2024-08-06' ? 'gpt-4o-2024-08-06'
+                    : requestModel === 'gpt4o-2024-11-20' ? 'gpt-4o-2024-11-20'
                     : requestModel === 'gpt4o-chatgpt' ? 'chatgpt-4o-latest'
                     : requestModel === 'gpt4o1-preview' ? 'o1-preview'
                     : requestModel === 'gpt4o1-mini' ? 'o1-mini'
@@ -524,6 +532,13 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                 body.response_format = {
                     "type": "json_schema",
                     "json_schema": getOpenAIJSONSchema()
+                }
+            }
+
+            if(db.OAIPrediction){
+                body.prediction = {
+                    type: "content",
+                    content: db.OAIPrediction
                 }
             }
 
@@ -664,7 +679,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                     url: replacerURL,
                 })
 
-                let dataUint = new Uint8Array([])
+                let dataUint:Uint8Array|Buffer = new Uint8Array([])
 
                 const transtream = new TransformStream<Uint8Array, StreamResponseChunk>(  {
                     async transform(chunk, control) {
@@ -1240,7 +1255,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
             const API_ENDPOINT="us-central1-aiplatform.googleapis.com"
             const PROJECT_ID=db.google.projectId
             const MODEL_ID= aiModel === 'palm2' ? 'text-bison' :
-                                        'palm2_unicorn' ? 'text-unicorn' : 
+                            aiModel ==='palm2_unicorn' ? 'text-unicorn' : 
                                         ''
             const LOCATION_ID="us-central1"
 
@@ -1286,6 +1301,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
         case 'gemini-1.5-pro-latest':
         case 'gemini-1.5-pro-exp-0801':
         case 'gemini-1.5-pro-exp-0827':
+        case 'gemini-exp-1114':
         case 'gemini-1.5-flash':
         case 'gemini-1.5-pro-002':
         case 'gemini-ultra':
@@ -2054,15 +2070,17 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                       "anthropic.claude-v2:1",
                       "anthropic.claude-3-haiku-20240307-v1:0",
                       "anthropic.claude-3-sonnet-20240229-v1:0",
+                      "anthropic.claude-3-opus-20240229-v1:0",
                       "anthropic.claude-3-5-sonnet-20240620-v1:0",
-                      "anthropic.claude-3-opus-20240229-v1:0"
+                      "anthropic.claude-3-5-sonnet-20241022-v2:0"
                     ];
                     
-                    const awsModel = 
-                        raiModel.includes("3-opus") ? modelIDs[5] :
-                        raiModel.includes("3-5-sonnet") ? modelIDs[4] :
+                    const awsModel = "us." + (
+                        raiModel.includes("3-5-sonnet-20241022") ? modelIDs[6] :
+                        raiModel.includes("3-5-sonnet-20240620") ? modelIDs[5] :
+                        raiModel.includes("3-opus") ? modelIDs[4] :
                         raiModel.includes("3-sonnet") ? modelIDs[3] : 
-                        modelIDs[2];
+                        modelIDs[2]);
                     const url = `https://${host}/model/${awsModel}/invoke${stream ? "-with-response-stream" : ""}`
 
                     const params = {
@@ -2228,9 +2246,16 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                                                         break
                                                     }
                                                     text += "Error:" + JSON.parse(e.data).error?.message
-                                                    controller.enqueue({
-                                                        "0": text
-                                                    })
+                                                    if(db.extractJson && db.jsonSchemaEnabled){
+                                                        controller.enqueue({
+                                                            "0": extractJSON(text, db.jsonSchema)
+                                                        })
+                                                    }
+                                                    else{
+                                                        controller.enqueue({
+                                                            "0": text
+                                                        })
+                                                    }
                                                 }
                                                 break
                                             }
@@ -2298,6 +2323,12 @@ export async function requestChatDataMain(arg:requestDataArgument, model:'model'
                     return {
                         type: 'fail',
                         result: JSON.stringify(res.data)
+                    }
+                }
+                if(db.extractJson && db.jsonSchemaEnabled){
+                    return {
+                        type: 'success',
+                        result: extractJSON(resText, db.jsonSchema)
                     }
                 }
                 return {

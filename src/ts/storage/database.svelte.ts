@@ -1,14 +1,9 @@
-export const DataBase = writable({} as any as Database)
-export const loadedStore = writable(false)
-export let appVer = "135.0.0"
-export let webAppSubVer = ''
-
 import { get, writable } from 'svelte/store';
 import { checkNullish, decryptBuffer, encryptBuffer, selectSingleFile } from '../util';
 import { changeLanguage, language } from '../../lang';
 import type { RisuPlugin } from '../plugins/plugins';
 import type {triggerscript as triggerscriptMain} from '../process/triggers';
-import { downloadFile, saveAsset as saveImageGlobal } from './globalApi';
+import { downloadFile, saveAsset as saveImageGlobal } from '../globalApi.svelte';
 import { defaultAutoSuggestPrompt, defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
 import { alertNormal, alertSelect } from '../alert';
 import type { NAISettings } from '../process/models/nai';
@@ -16,6 +11,10 @@ import { prebuiltNAIpresets, prebuiltPresets } from '../process/templates/templa
 import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
+
+export let appVer = "139.0.0"
+export let webAppSubVer = ''
+
 
 export function setDatabase(data:Database){
     if(checkNullish(data.characters)){
@@ -302,6 +301,7 @@ export function setDatabase(data:Database){
     data.sendWithEnter ??= true
     data.autoSuggestPrompt ??= defaultAutoSuggestPrompt
     data.autoSuggestPrefix ??= ""
+    data.OAIPrediction ??= ''
     data.autoSuggestClean ??= true
     data.imageCompression ??= true
     if(!data.formatingOrder.includes('personaPrompt')){
@@ -316,16 +316,16 @@ export function setDatabase(data:Database){
         largePortrait: false
     }]
     data.classicMaxWidth ??= false
-    data.ooba ??= structuredClone(defaultOoba)
-    data.ainconfig ??= structuredClone(defaultAIN)
+    data.ooba ??= safeStructuredClone(defaultOoba)
+    data.ainconfig ??= safeStructuredClone(defaultAIN)
     data.openrouterKey ??= ''
     data.openrouterRequestModel ??= 'openai/gpt-3.5-turbo'
     data.toggleConfirmRecommendedPreset ??= true
     data.officialplugins ??= {}
-    data.NAIsettings ??= structuredClone(prebuiltNAIpresets)
+    data.NAIsettings ??= safeStructuredClone(prebuiltNAIpresets)
     data.assetWidth ??= -1
     data.animationSpeed ??= 0.4
-    data.colorScheme ??= structuredClone(defaultColorScheme)
+    data.colorScheme ??= safeStructuredClone(defaultColorScheme)
     data.colorSchemeName ??= 'default'
     data.NAIsettings.starter ??= ""
     data.hypaModel ??= 'MiniLM'
@@ -351,6 +351,7 @@ export function setDatabase(data:Database){
     data.newOAIHandle ??= true
     data.gptVisionQuality ??= 'low'
     data.huggingfaceKey ??= ''
+    data.fishSpeechKey ??= ''
     data.statistics ??= {}
     data.reverseProxyOobaArgs ??= {
         mode: 'instruct'
@@ -444,10 +445,71 @@ export function setDatabase(data:Database){
     data.customQuotes ??= false
     data.customQuotesData ??= ['“','”','‘','’']
     data.groupOtherBotRole ??= 'user'
+    data.customGUI ??= ''
     changeLanguage(data.language)
-    DataBase.set(data)
+    setDatabaseLite(data)
 }
 
+export function setDatabaseLite(data:Database){
+    if(import.meta.env.DEV){
+        console.trace('setDatabaseLite executed')
+    }
+    DBState.db = data
+}
+
+interface getDatabaseOptions{
+    snapshot?:boolean
+}
+
+export function getDatabase(options:getDatabaseOptions = {}):Database{
+    if(options.snapshot){
+        return $state.snapshot(DBState.db) as Database
+    }
+    return DBState.db as Database
+}
+
+export function getCurrentCharacter(options:getDatabaseOptions = {}):character|groupChat{
+    const db = getDatabase(options)
+    if(!db.characters){
+        db.characters = []
+    }
+    const char = db.characters?.[get(selectedCharID)]
+    return char
+}
+
+export function setCurrentCharacter(char:character|groupChat){
+    if(!DBState.db.characters){
+        DBState.db.characters = []
+    }
+    DBState.db.characters[get(selectedCharID)] = char
+}
+
+export function getCharacterByIndex(index:number,options:getDatabaseOptions = {}):character|groupChat{
+    const db = getDatabase(options)
+    if(!db.characters){
+        db.characters = []
+    }
+    const char = db.characters?.[index]
+    return char
+}
+
+export function setCharacterByIndex(index:number,char:character|groupChat){
+    if(!DBState.db.characters){
+        DBState.db.characters = []
+    }
+    DBState.db.characters[index] = char
+}
+
+export function getCurrentChat(){
+    const char = getCurrentCharacter()
+    return char?.chats[char.chatPage]
+}
+
+export function setCurrentChat(chat:Chat){
+    const char = getCurrentCharacter()
+    char.chats[char.chatPage] = chat
+    setCurrentCharacter(char)
+}
 
 export interface Database{
     characters: (character|groupChat)[],
@@ -652,6 +714,7 @@ export interface Database{
     tpo?:boolean
     automark?:boolean
     huggingfaceKey:string
+    fishSpeechKey:string
     allowAllExtentionFiles?:boolean
     translatorPrompt:string
     translatorMaxResponse:number
@@ -751,6 +814,10 @@ export interface Database{
     customQuotesData?:[string, string, string, string]
     groupTemplate?:string
     groupOtherBotRole?:string
+    customGUI:string
+    guiHTML:string
+    logShare:boolean
+    OAIPrediction:string
 }
 
 export interface customscript{
@@ -864,6 +931,16 @@ export interface character{
         top_k?:number
         text_split_method?: "cut0" | "cut1" | "cut2" | "cut3" | "cut4" | "cut5"
     }
+    fishSpeechConfig?:{
+        model?: {
+            _id:string
+            title:string
+            description:string
+        },
+        chunk_length:number,
+        normalize:boolean,
+        
+    }
     supaMemory?:boolean
     additionalAssets?:[string, string, string][]
     ttsReadOnlyQuoted?:boolean
@@ -917,7 +994,7 @@ export interface loreSettings{
 }
 
 
-export interface groupChat{
+export interface groupChat{ 
     type: 'group'
     image?:string
     firstMessage:string
@@ -955,6 +1032,30 @@ export interface groupChat{
     lowLevelAccess?:boolean
     hideChatIcon?:boolean
     lastInteraction?:number
+
+    //lazy hack for typechecking
+    voicevoxConfig?:any
+    ttsSpeech?:string
+    naittsConfig?:any
+    oaiVoice?:string
+    hfTTS?: any
+    vits?: OnnxModelFiles
+    gptSoVitsConfig?:any
+    fishSpeechConfig?:any
+    ttsReadOnlyQuoted?:boolean
+    exampleMessage?:string
+    systemPrompt?:string
+    replaceGlobalNote?:string
+    additionalText?:string
+    personality?:string
+    scenario?:string
+    translatorNote?:string
+    additionalData?: any
+    depth_prompt?: { depth: number, prompt: string }
+    additionalAssets?:[string, string, string][]
+    utilityBot?:boolean
+    license?:string
+    realmId:string
 }
 
 export interface botPreset{
@@ -1225,8 +1326,8 @@ export const presetTemplate:botPreset = {
     promptPreprocess: false,
     proxyKey: '',
     bias: [],
-    ooba: structuredClone(defaultOoba),
-    ainconfig: structuredClone(defaultAIN),
+    ooba: safeStructuredClone(defaultOoba),
+    ainconfig: safeStructuredClone(defaultAIN),
     reverseProxyOobaArgs: {
         mode: 'instruct'
     },
@@ -1245,11 +1346,11 @@ const defaultSdData:[string,string][] = [
 ]
 
 export const defaultSdDataFunc = () =>{
-    return structuredClone(defaultSdData)
+    return safeStructuredClone(defaultSdData)
 }
 
 export function saveCurrentPreset(){
-    let db = get(DataBase)
+    let db = getDatabase()
     let pres = db.botPresets
     pres[db.botPresetsId] = {
         name: pres[db.botPresetsId].name,
@@ -1275,20 +1376,20 @@ export function saveCurrentPreset(){
         bias: db.bias,
         koboldURL: db.koboldURL,
         proxyKey: db.proxyKey,
-        ooba: structuredClone(db.ooba),
-        ainconfig: structuredClone(db.ainconfig),
+        ooba: safeStructuredClone(db.ooba),
+        ainconfig: safeStructuredClone(db.ainconfig),
         proxyRequestModel: db.proxyRequestModel,
         openrouterRequestModel: db.openrouterRequestModel,
-        NAISettings: structuredClone(db.NAIsettings),
+        NAISettings: safeStructuredClone(db.NAIsettings),
         promptTemplate: db.promptTemplate ?? null,
         NAIadventure: db.NAIadventure ?? false,
         NAIappendName: db.NAIappendName ?? false,
         localStopStrings: db.localStopStrings,
         autoSuggestPrompt: db.autoSuggestPrompt,
         customProxyRequestModel: db.customProxyRequestModel,
-        reverseProxyOobaArgs: structuredClone(db.reverseProxyOobaArgs) ?? null,
+        reverseProxyOobaArgs: safeStructuredClone(db.reverseProxyOobaArgs) ?? null,
         top_p: db.top_p ?? 1,
-        promptSettings: structuredClone(db.promptSettings) ?? null,
+        promptSettings: safeStructuredClone(db.promptSettings) ?? null,
         repetition_penalty: db.repetition_penalty,
         min_p: db.min_p,
         top_a: db.top_a,
@@ -1313,9 +1414,9 @@ export function saveCurrentPreset(){
 
 export function copyPreset(id:number){
     saveCurrentPreset()
-    let db = get(DataBase)
+    let db = getDatabase()
     let pres = db.botPresets
-    const newPres = structuredClone(pres[id])
+    const newPres = safeStructuredClone(pres[id])
     newPres.name += " Copy"
     db.botPresets.push(newPres)
     setDatabase(db)
@@ -1325,7 +1426,7 @@ export function changeToPreset(id =0, savecurrent = true){
     if(savecurrent){
         saveCurrentPreset()
     }
-    let db = get(DataBase)
+    let db = getDatabase()
     let pres = db.botPresets
     const newPres = pres[id]
     db.botPresetsId = id
@@ -1355,8 +1456,8 @@ export function setPreset(db:Database, newPres: botPreset){
     db.bias = newPres.bias ?? db.bias
     db.koboldURL = newPres.koboldURL ?? db.koboldURL
     db.proxyKey = newPres.proxyKey ?? db.proxyKey
-    db.ooba = structuredClone(newPres.ooba ?? db.ooba)
-    db.ainconfig = structuredClone(newPres.ainconfig ?? db.ainconfig)
+    db.ooba = safeStructuredClone(newPres.ooba ?? db.ooba)
+    db.ainconfig = safeStructuredClone(newPres.ainconfig ?? db.ainconfig)
     db.openrouterRequestModel = newPres.openrouterRequestModel ?? db.openrouterRequestModel
     db.proxyRequestModel = newPres.proxyRequestModel ?? db.proxyRequestModel
     db.NAIsettings = newPres.NAISettings ?? db.NAIsettings
@@ -1371,12 +1472,12 @@ export function setPreset(db:Database, newPres: botPreset){
     db.NAIsettings.mirostat_lr ??= 1
     db.localStopStrings = newPres.localStopStrings
     db.customProxyRequestModel = newPres.customProxyRequestModel ?? ''
-    db.reverseProxyOobaArgs = structuredClone(newPres.reverseProxyOobaArgs) ?? {
+    db.reverseProxyOobaArgs = safeStructuredClone(newPres.reverseProxyOobaArgs) ?? {
         mode: 'instruct'
     }
     db.top_p = newPres.top_p ?? 1
     //@ts-ignore //for legacy mistpings
-    db.promptSettings = structuredClone(newPres.promptSettings) ?? {
+    db.promptSettings = safeStructuredClone(newPres.promptSettings) ?? {
         assistantPrefill: '',
         postEndInnerFormat: '',
         sendChatAsSystem: false,
@@ -1409,11 +1510,12 @@ import type { OnnxModelFiles } from '../process/transformers';
 import type { RisuModule } from '../process/modules';
 import type { HypaV2Data } from '../process/memory/hypav2';
 import { decodeRPack, encodeRPack } from '../rpack/rpack_bg';
+import { DBState, selectedCharID } from '../stores.svelte';
 
 export async function downloadPreset(id:number, type:'json'|'risupreset'|'return' = 'json'){
     saveCurrentPreset()
-    let db = get(DataBase)
-    let pres = structuredClone(db.botPresets[id])
+    let db = getDatabase()
+    let pres = safeStructuredClone(db.botPresets[id])
     console.log(pres)
     pres.openAIKey = ''
     pres.forceReplaceUrl = ''
@@ -1483,10 +1585,10 @@ export async function importPreset(f:{
         pre = {...presetTemplate,...(JSON.parse(Buffer.from(f.data).toString('utf-8')))}
         console.log(pre)
     }
-    let db = get(DataBase)
+    let db = getDatabase()
     if(pre.presetVersion && pre.presetVersion >= 3){
         //NAI preset
-        const pr = structuredClone(prebuiltPresets.NAI2)
+        const pr = safeStructuredClone(prebuiltPresets.NAI2)
         pr.temperature = pre.parameters.temperature * 100
         pr.maxResponse = pre.parameters.max_length
         pr.NAISettings.topK = pre.parameters.top_k
@@ -1511,7 +1613,7 @@ export async function importPreset(f:{
 
     if(Array.isArray(pre?.prompt_order?.[0]?.order) && Array.isArray(pre?.prompts)){
         //ST preset
-        const pr = structuredClone(presetTemplate)
+        const pr = safeStructuredClone(presetTemplate)
         pr.promptTemplate = []
 
         function findPrompt(identifier:number){
