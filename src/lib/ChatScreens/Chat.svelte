@@ -2,25 +2,28 @@
     import { ArrowLeft, Sparkles, ArrowRight, PencilIcon, LanguagesIcon, RefreshCcwIcon, TrashIcon, CopyIcon, Volume2Icon, BotIcon, ArrowLeftRightIcon, UserIcon } from "lucide-svelte";
     import { type CbsConditions, ParseMarkdown, postTranslationParse, type simpleCharacterArgument } from "../../ts/parser.svelte";
     import AutoresizeArea from "../UI/GUI/TextAreaResizable.svelte";
-    import { alertConfirm, alertError, alertRequestData } from "../../ts/alert";
+    import { alertConfirm, alertError, alertNormal, alertRequestData, alertWait } from "../../ts/alert";
     import { language } from "../../lang";
     import { type MessageGenerationInfo } from "../../ts/storage/database.svelte";
     import { alertStore, DBState } from 'src/ts/stores.svelte';
     import { HideIconStore, ReloadGUIPointer, selIdState } from "../../ts/stores.svelte";
     import { translateHTML } from "../../ts/translator/translator";
     import { risuChatParser } from "src/ts/process/scripts";
-    import { get, type Unsubscriber } from "svelte/store";
-    import { isEqual } from "lodash";
+    import { type Unsubscriber } from "svelte/store";
+    import { get, isEqual, startsWith } from "lodash";
     import { sayTTS } from "src/ts/process/tts";
-    import { getModelShortName } from "src/ts/model/names";
-    import { capitalize } from "src/ts/util";
+    import { capitalize, sleep } from "src/ts/util";
     import { longpress } from "src/ts/gui/longtouch";
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme";
     import { ConnectionOpenStore } from "src/ts/sync/multiuser";
     import { onDestroy, onMount } from "svelte";
+    import { getModelInfo } from "src/ts/model/modellist";
+  import { getCharImage } from "src/ts/characters";
+  import { getFileSrc } from "src/ts/globalApi.svelte";
     let translating = $state(false)
     let editMode = $state(false)
     let statusMessage:string = $state('')
+    let retranslate = false
     interface Props {
         message?: string;
         name?: string;
@@ -148,10 +151,22 @@
                 }
             }
             if(translateText){
-                if(!DBState.db.legacyTranslation){
+                let doRetranslate = retranslate
+                retranslate = false
+                if(DBState.db.translatorType === 'llm' && DBState.db.translateBeforeHTMLFormatting){
+                    await sleep(100)
+                    translating = true
+                    data = await translateHTML(data, false, charArg, chatID, doRetranslate)
+                    translating = false
+                    const marked = await ParseMarkdown(data, charArg, mode, chatID, getCbsCondition())
+                    lastParsedQueue = marked
+                    lastCharArg = charArg
+                    return marked
+                }
+                else if(!DBState.db.legacyTranslation){
                     const marked = await ParseMarkdown(data, charArg, 'pretranslate', chatID, getCbsCondition())
                     translating = true
-                    const translated = await postTranslationParse(await translateHTML(marked, false, charArg, chatID))
+                    const translated = await postTranslationParse(await translateHTML(marked, false, charArg, chatID, doRetranslate))
                     translating = false
                     lastParsedQueue = translated
                     lastCharArg = charArg
@@ -160,7 +175,7 @@
                 else{
                     const marked = await ParseMarkdown(data, charArg, mode, chatID, getCbsCondition())
                     translating = true
-                    const translated = await translateHTML(marked, false, charArg, chatID)
+                    const translated = await translateHTML(marked, false, charArg, chatID, doRetranslate)
                     translating = false
                     lastParsedQueue = translated
                     lastCharArg = charArg
@@ -207,7 +222,6 @@
         try {
             const parser = new DOMParser()
             const doc = parser.parseFromString(risuChatParser(html ?? '', {cbsConditions: getCbsCondition()}), 'text/html')
-            console.log(doc.body)
             return doc.body   
         } catch (error) {
             const placeholder = document.createElement('div')
@@ -219,24 +233,40 @@
 
 
 {#snippet genInfo()}
-    {#if messageGenerationInfo && DBState.db.requestInfoInsideChat}
-        <div>
-            <button class="text-sm p-1 text-textcolor2 border-darkborderc float-end mr-2 my-2
-                            hover:ring-darkbutton hover:ring rounded-md hover:text-textcolor transition-all flex justify-center items-center" 
-                    onclick={() => {
-                        alertRequestData({
-                            genInfo: messageGenerationInfo,
-                            idx: idx,
-                        })
-                    }}
-            >
-                <BotIcon size={20} />
-                <span class="ml-1">
-                    {capitalize(getModelShortName(messageGenerationInfo.model))}
-                </span>
-            </button>
+        <div class="flex flex-col items-end">
+            {#if messageGenerationInfo && DBState.db.requestInfoInsideChat}
+
+                <button class="text-sm p-1 text-textcolor2 border-darkborderc float-end mr-2 my-1
+                                hover:ring-darkbutton hover:ring rounded-md hover:text-textcolor transition-all flex justify-center items-center" 
+                        onclick={() => {
+                            alertRequestData({
+                                genInfo: messageGenerationInfo,
+                                idx: idx,
+                            })
+                        }}
+                >
+                    <BotIcon size={20} />
+                    <span class="ml-1">
+                        {capitalize(getModelInfo(messageGenerationInfo.model).shortName)}
+                    </span>
+                </button>
+            {/if}
+            {#if DBState.db.translatorType === 'llm' && translated && !lastParsed.startsWith(`div class="flex justify-center items-center"><div class="animate-spin`)}
+                <button class="text-sm p-1 text-textcolor2 border-darkborderc float-end mr-2 my-1
+                                hover:ring-darkbutton hover:ring rounded-md hover:text-textcolor transition-all flex justify-center items-center" 
+                        onclick={() => {
+                            lastParsed = `<div class="flex justify-center items-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-textcolor"></div></div>`
+                            retranslate = true
+                            $ReloadGUIPointer = $ReloadGUIPointer + 1
+                        }}
+                >
+                    <RefreshCcwIcon size={20} />
+                    <span class="ml-1">
+                        {language.retranslate}
+                    </span>
+                </button>
+            {/if}
         </div>
-    {/if}
 {/snippet}
 
 {#snippet textBox()}
@@ -273,18 +303,102 @@
 {#snippet icons(options:{applyTextColors?:boolean} = {})}
     <div class="flex-grow flex items-center justify-end" class:text-textcolor2={options?.applyTextColors !== false}>
         <span class="text-xs">{statusMessage}</span>
-        {#if DBState.db.logShare}
-            <button class="ml-2 hover:text-blue-500 transition-colors" onclick={() => {
-                alertStore.set({
-                    type: 'pukmakkurit',
-                    msg: lastParsed,
-                })
-            }}>
-                <Sparkles size={22}/>
-            </button>
-        {/if}
         {#if DBState.db.useChatCopy && !blankMessage}
-            <button class="ml-2 hover:text-blue-500 transition-colors" onclick={()=>{
+            <button class="ml-2 hover:text-blue-500 transition-colors button-icon-copy" onclick={async ()=>{
+                if(window.navigator.clipboard.write){
+                    alertWait(language.loading)
+                    const root = document.querySelector(':root') as HTMLElement;
+
+                    const parser = new DOMParser()
+                    const doc = parser.parseFromString(lastParsed, 'text/html')
+                    doc.querySelectorAll('mark').forEach((el) => {
+                        const d = el.getAttribute('risu-mark')
+                        if(d === 'quote1' || d === 'quote2'){
+                            const newEle = document.createElement('div')
+                            newEle.textContent = el.textContent
+                            newEle.setAttribute('style', `background: transparent; color: ${
+                                root.style.getPropertyValue('--FontColorQuote' + d.slice(-1))
+                            };`)
+                            el.replaceWith(newEle)
+                            return
+                        }
+                    })
+                    doc.querySelectorAll('p').forEach((el) => {
+                        el.setAttribute('style', `color: ${root.style.getPropertyValue('--FontColorStandard')};`)
+                    })
+                    doc.querySelectorAll('em').forEach((el) => {
+                        el.setAttribute('style', `font-style: italic; color: ${root.style.getPropertyValue('--FontColorItalic')};`)
+                    })
+                    doc.querySelectorAll('strong').forEach((el) => {
+                        el.setAttribute('style', `font-weight: bold; color: ${root.style.getPropertyValue('--FontColorBold')};`)
+                    })
+                    doc.querySelectorAll('em strong').forEach((el) => {
+                        el.setAttribute('style', `font-weight: bold; font-style: italic; color: ${root.style.getPropertyValue('--FontColorItalicBold')};`)
+                    })
+                    doc.querySelectorAll('strong em').forEach((el) => {
+                        el.setAttribute('style', `font-weight: bold; font-style: italic; color: ${root.style.getPropertyValue('--FontColorItalicBold')};`)
+                    })
+                    const imgs = doc.querySelectorAll('img')
+                    for(const img of imgs){
+                        img.setAttribute('alt', 'from RisuAI')
+                        const url = img.getAttribute('src')
+                        if(url.startsWith('http://asset.localhost') || url.startsWith('https://asset.localhost') || url.startsWith('https://sv.risuai')){
+                            try {
+                                const data = await fetch(url)
+                                img.setAttribute('src', `${await data.blob().then((b) => new Promise((resolve, reject) => {
+                                    const reader = new FileReader()
+                                    reader.onload = () => resolve(reader.result as string)
+                                    reader.onerror = reject
+                                    reader.readAsDataURL(b)
+                                }))}`)
+                            } catch (error) {
+                                console.error(error)
+                            }
+                        }
+                    }
+
+                    let iconImage = (await getFileSrc(DBState.db.characters[selIdState.selId].image ?? '')) ?? ''
+                    let iconDataUrl = ''
+
+                    if(iconImage.startsWith('http://asset.localhost') || iconImage.startsWith('https://asset.localhost') || iconImage.startsWith('https://sv.risuai')){
+                        try {
+                            const data = await fetch(iconImage)
+                            iconDataUrl = await data.blob().then((b) => new Promise((resolve, reject) => {
+                                const reader = new FileReader()
+                                reader.onload = () => resolve(reader.result as string)
+                                reader.onerror = reject
+                                reader.readAsDataURL(b)
+                            }))
+                        } catch (error) {
+                            console.error(error)
+                        }
+                    }
+
+
+                    const html = `
+                        <div style="background: ${root.style.getPropertyValue('--risu-theme-bgcolor')};display: flex;flex-direction: column;align-items: center;justify-content: center;border: 1px solid ${root.style.getPropertyValue('--risu-theme-darkborderc')};border-radius: 0.5rem;box-shadow: 0 0 0.5rem ${root.style.getPropertyValue('--risu-theme-darkborderc')};margin: 1rem;">
+                            <div style="display: flex;align-items: center;justify-content: center; margin-top: 0.5rem;">
+                                <img style="max-width: 100px; max-height: 100px;border-radius: 50%;border: 2px solid ${root.style.getPropertyValue('--risu-theme-darkborderc')};margin-top: 1rem;width: 100px; height: 100px;" src="${iconDataUrl}" alt="from RisuAI" width="100" height="100">
+                            </div><span style="font-size: 1.5rem;color: ${root.style.getPropertyValue('--risu-theme-textcolor')};font-weight: bold;">${name}</span><span style="background: ${root.style.getPropertyValue('--risu-theme-darkbg')};color: ${root.style.getPropertyValue('--risu-theme-textcolor')};padding: 0.25rem;border-radius: 0.5rem;font-size: 0.75rem;">${capitalize(getModelInfo(messageGenerationInfo.model).shortName)}</span>
+                            <div style="padding-left: 1rem;padding-right: 1rem;padding-bottom: 0.5rem;padding-top: 1rem;width: 100%;">
+                                ${doc.body.innerHTML}
+                            </div>
+                            <div style="text-align: right;padding: 0.5rem;">
+                                <span style="font-size: 0.75rem;color: ${root.style.getPropertyValue('--risu-theme-textcolor')};">From RisuAI</span>
+                            </div>
+                        </div>
+                    `
+
+
+                    await window.navigator.clipboard.write([
+                        new ClipboardItem({
+                            'text/plain': new Blob([msgDisplay], {type: 'text/plain'}),
+                            'text/html': new Blob([html], {type: 'text/html'})
+                        })
+                    ])
+                    alertNormal(language.copied)
+                    return
+                }
                 window.navigator.clipboard.writeText(msgDisplay).then(() => {
                     setStatusMessage(language.copied)
                 })
@@ -294,7 +408,7 @@
         {/if}
         {#if idx > -1}
             {#if DBState.db.characters[selIdState.selId].type !== 'group' && DBState.db.characters[selIdState.selId].ttsMode !== 'none' && (DBState.db.characters[selIdState.selId].ttsMode)}
-                <button class="ml-2 hover:text-blue-500 transition-colors" onclick={()=>{
+                <button class="ml-2 hover:text-blue-500 transition-colors button-icon-tts" onclick={()=>{
                     return sayTTS(null, message)
                 }}>
                     <Volume2Icon size={20}/>
@@ -302,7 +416,7 @@
             {/if}
 
             {#if !$ConnectionOpenStore}
-                <button class={"ml-2 hover:text-blue-500 transition-colors "+(editMode?'text-blue-400':'')} onclick={() => {
+                <button class={"ml-2 hover:text-blue-500 transition-colors button-icon-edit "+(editMode?'text-blue-400':'')} onclick={() => {
                     if(!editMode){
                         editMode = true
                     }
@@ -313,13 +427,13 @@
                 }}>
                     <PencilIcon size={20}/>
                 </button>
-                <button class="ml-2 hover:text-blue-500 transition-colors" onclick={(e) => rm(e, false)} use:longpress={(e) => rm(e, true)}>
+                <button class="ml-2 hover:text-blue-500 transition-colors button-icon-remove" onclick={(e) => rm(e, false)} use:longpress={(e) => rm(e, true)}>
                     <TrashIcon size={20}/>
                 </button>
             {/if}
         {/if}
         {#if DBState.db.translator !== '' && !blankMessage}
-            <button class={"ml-2 cursor-pointer hover:text-blue-500 transition-colors " + (translated ? 'text-blue-400':'')} class:translating={translating} onclick={async () => {
+            <button class={"ml-2 cursor-pointer hover:text-blue-500 transition-colors button-icon-translate " + (translated ? 'text-blue-400':'')} class:translating={translating} onclick={async () => {
                 translated = !translated
             }}>
                 <LanguagesIcon />
@@ -327,14 +441,14 @@
         {/if}
         {#if rerollIcon || altGreeting}
             {#if DBState.db.swipe || altGreeting}
-                <button class="ml-2 hover:text-blue-500 transition-colors" onclick={unReroll}>
+                <button class="ml-2 hover:text-blue-500 transition-colors button-icon-unreroll" onclick={unReroll}>
                     <ArrowLeft size={22}/>
                 </button>
-                <button class="ml-2 hover:text-blue-500 transition-colors" onclick={onReroll}>
+                <button class="ml-2 hover:text-blue-500 transition-colors button-icon-reroll" onclick={onReroll}>
                     <ArrowRight size={22}/>
                 </button>
             {:else}
-                <button class="ml-2 hover:text-blue-500 transition-colors" onclick={onReroll}>
+                <button class="ml-2 hover:text-blue-500 transition-colors button-icon-reroll" onclick={onReroll}>
                     <RefreshCcwIcon size={20}/>
                 </button>
             {/if}
@@ -558,7 +672,7 @@
 
                         </div>
                         {#if editMode}
-                            <textarea class="flex-grow h-138 sm:h-96 overflow-y-auto bg-transparent text-black p-2 mb-2 resize-none" bind:value={message}></textarea>
+                            <textarea class="flex-grow h-138 sm:h-96 overflow-y-auto bg-transparent text-black p-2 mb-2 resize-none message-edit-area" bind:value={message}></textarea>
                         {:else}
                             <div class="flex-grow h-138 sm:h-96 overflow-y-auto p-2 mb-2 sm:mb-0">
                                 {@render textBox()}

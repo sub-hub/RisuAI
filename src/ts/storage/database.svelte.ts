@@ -12,7 +12,7 @@ import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
-export let appVer = "139.0.0"
+export let appVer = "140.0.1"
 export let webAppSubVer = ''
 
 
@@ -446,6 +446,20 @@ export function setDatabase(data:Database){
     data.customQuotesData ??= ['“','”','‘','’']
     data.groupOtherBotRole ??= 'user'
     data.customGUI ??= ''
+    data.customAPIFormat ??= LLMFormat.OpenAICompatible
+    data.systemContentReplacement ??= `system: {{slot}}`
+    data.systemRoleReplacement ??= 'user'
+    data.vertexAccessToken ??= ''
+    data.vertexAccessTokenExpires ??= 0
+    data.vertexClientEmail ??= ''
+    data.vertexPrivateKey ??= ''
+    data.seperateParametersEnabled ??= false
+    data.seperateParameters = {
+        memory: {},
+        emotion: {},
+        translate: {},
+        otherAx: {}
+    }
     changeLanguage(data.language)
     setDatabaseLite(data)
 }
@@ -818,6 +832,32 @@ export interface Database{
     guiHTML:string
     logShare:boolean
     OAIPrediction:string
+    customAPIFormat:LLMFormat
+    systemContentReplacement:string
+    systemRoleReplacement:'user'|'assistant'
+    vertexPrivateKey: string
+    vertexClientEmail: string
+    vertexAccessToken: string
+    vertexAccessTokenExpires: number
+    seperateParametersEnabled:boolean
+    seperateParameters:{
+        memory: SeparateParameters,
+        emotion: SeparateParameters,
+        translate: SeparateParameters,
+        otherAx: SeparateParameters
+    }
+    translateBeforeHTMLFormatting:boolean
+}
+
+interface SeparateParameters{
+    temperature?:number
+    top_k?:number
+    repetition_penalty?:number
+    min_p?:number
+    top_a?:number
+    top_p?:number
+    frequency_penalty?:number
+    presence_penalty?:number
 }
 
 export interface customscript{
@@ -1115,6 +1155,17 @@ export interface botPreset{
     extractJson?:string
     groupTemplate?:string
     groupOtherBotRole?:string
+    seperateParametersEnabled?:boolean
+    seperateParameters?:{
+        memory: SeparateParameters,
+        emotion: SeparateParameters,
+        translate: SeparateParameters,
+        otherAx: SeparateParameters
+    }
+    customAPIFormat?:LLMFormat
+    systemContentReplacement?: string
+    systemRoleReplacement?: 'user'|'assistant'
+    openAIPrediction?: string
 }
 
 
@@ -1407,6 +1458,12 @@ export function saveCurrentPreset(){
         extractJson:db.extractJson ?? '',
         groupOtherBotRole: db.groupOtherBotRole ?? 'user',
         groupTemplate: db.groupTemplate ?? '',
+        seperateParametersEnabled: db.seperateParametersEnabled ?? false,
+        seperateParameters: safeStructuredClone(db.seperateParameters),
+        openAIPrediction: db.OAIPrediction,
+        customAPIFormat: safeStructuredClone(db.customAPIFormat),
+        systemContentReplacement: db.systemContentReplacement,
+        systemRoleReplacement: db.systemRoleReplacement,
     }
     db.botPresets = pres
     setDatabase(db)
@@ -1501,6 +1558,17 @@ export function setPreset(db:Database, newPres: botPreset){
     db.extractJson = newPres.extractJson ?? ''
     db.groupOtherBotRole = newPres.groupOtherBotRole ?? 'user'
     db.groupTemplate = newPres.groupTemplate ?? ''
+    db.seperateParametersEnabled = newPres.seperateParametersEnabled ?? false
+    db.seperateParameters = newPres.seperateParameters ? safeStructuredClone(newPres.seperateParameters) : {
+        memory: {},
+        emotion: {},
+        translate: {},
+        otherAx: {}
+    }
+    db.OAIPrediction = newPres.openAIPrediction ?? ''
+    db.customAPIFormat = safeStructuredClone(newPres.customAPIFormat) ?? LLMFormat.OpenAICompatible
+    db.systemContentReplacement = newPres.systemContentReplacement ?? ''
+    db.systemRoleReplacement = newPres.systemRoleReplacement ?? 'user'
     return db
 }
 
@@ -1511,6 +1579,8 @@ import type { RisuModule } from '../process/modules';
 import type { HypaV2Data } from '../process/memory/hypav2';
 import { decodeRPack, encodeRPack } from '../rpack/rpack_bg';
 import { DBState, selectedCharID } from '../stores.svelte';
+import { LLMFormat } from '../model/modellist';
+import type { Parameter } from '../process/request';
 
 export async function downloadPreset(id:number, type:'json'|'risupreset'|'return' = 'json'){
     saveCurrentPreset()
