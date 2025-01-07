@@ -10,7 +10,7 @@
     import { tokenizeAccurate, tokenizerList } from "src/ts/tokenizer";
     import ModelList from "src/lib/UI/ModelList.svelte";
     import DropList from "src/lib/SideBars/DropList.svelte";
-    import { PlusIcon, TrashIcon, FolderUpIcon, DownloadIcon } from "lucide-svelte";
+    import { PlusIcon, TrashIcon, FolderUpIcon, DownloadIcon, UploadIcon } from "lucide-svelte";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
     import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
     import SliderInput from "src/lib/UI/GUI/SliderInput.svelte";
@@ -29,6 +29,7 @@
     import { selectSingleFile } from "src/ts/util";
   import { getModelInfo, LLMFlags, LLMFormat, LLMProvider } from "src/ts/model/modellist";
   import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
+  import RegexList from "src/lib/SideBars/Scripts/RegexList.svelte";
 
     let tokens = $state({
         mainPrompt: 0,
@@ -114,7 +115,8 @@
         <span class="text-textcolor">Mancer {language.apiKey}</span>
         <TextInput hideText={DBState.db.hideApiKey} marginBottom={true} size={"sm"} placeholder="..." bind:value={DBState.db.mancerHeader}/>
     {/if}
-    {#if modelInfo.provider === LLMProvider.Anthropic || subModelInfo.provider === LLMProvider.Anthropic}
+    {#if modelInfo.provider === LLMProvider.Anthropic || subModelInfo.provider === LLMProvider.Anthropic
+            || modelInfo.provider === LLMProvider.AWS || subModelInfo.provider === LLMProvider.AWS }
         <span class="text-textcolor">Claude {language.apiKey}</span>
         <TextInput hideText={DBState.db.hideApiKey} marginBottom={true} size={"sm"} placeholder="..." bind:value={DBState.db.claudeAPIKey}/>
     {/if}
@@ -270,7 +272,7 @@
 
 {#if submenu === 1 || submenu === -1}
     <span class="text-textcolor">{language.maxContextSize}</span>
-    <NumberInput min={0} max={getModelMaxContext(DBState.db.aiModel)} marginBottom={true} bind:value={DBState.db.maxContext}/>
+    <NumberInput min={0} marginBottom={true} bind:value={DBState.db.maxContext}/>
 
 
     <span class="text-textcolor">{language.maxResponseSize}</span>
@@ -579,25 +581,84 @@
             {#if submenu !== -1}
                 <PromptSettings mode='inline' subMenu={1} />
             {/if}
-            <Check check={!!DBState.db.promptTemplate} name={language.usePromptTemplate} className="mt-4" onChange={async ()=>{
-                const conf = await alertConfirm(language.resetPromptTemplateConfirm)
-                
-                if(conf){
-                    DBState.db.promptTemplate = undefined
-                }
-                else{
-                    DBState.db.promptTemplate = DBState.db.promptTemplate
-                }
-            }}/>
         {:else}
             <Check check={false} name={language.usePromptTemplate} onChange={() => {
                 DBState.db.promptTemplate = []
             }}/>
         {/if}
     </Arcodion>
-    
-    <Arcodion styled name={language.moduleIntergration} help="moduleIntergration">
-        <TextAreaInput bind:value={DBState.db.moduleIntergration} fullwidth height={"32"} autocomplete="off"/>
+
+    {#snippet CustomFlagButton(name:string,flag:number)}
+        <Button className="mt-2" onclick={(e) => {
+            if(DBState.db.customFlags.includes(flag)){
+                DBState.db.customFlags = DBState.db.customFlags.filter((f) => f !== flag)
+            }
+            else{
+                DBState.db.customFlags.push(flag)
+            }
+        }} styled={DBState.db.customFlags.includes(flag) ? 'primary' : 'outlined'}>
+            {name}
+        </Button>
+    {/snippet}
+
+    <Arcodion styled name={language.customFlags}>
+        <Check bind:check={DBState.db.enableCustomFlags} name={language.enableCustomFlags}/>
+
+
+        {#if DBState.db.enableCustomFlags}
+            {@render CustomFlagButton('hasImageInput', 0)}
+            {@render CustomFlagButton('hasImageOutput', 1)}
+            {@render CustomFlagButton('hasAudioInput', 2)}
+            {@render CustomFlagButton('hasAudioOutput', 3)}
+            {@render CustomFlagButton('hasPrefill', 4)}
+            {@render CustomFlagButton('hasCache', 5)}
+            {@render CustomFlagButton('hasFullSystemPrompt', 6)}
+            {@render CustomFlagButton('hasFirstSystemPrompt', 7)}
+            {@render CustomFlagButton('hasStreaming', 8)}
+            {@render CustomFlagButton('requiresAlternateRole', 9)}
+            {@render CustomFlagButton('mustStartWithUserInput', 10)}
+            {@render CustomFlagButton('hasVideoInput', 12)}
+            {@render CustomFlagButton('OAICompletionTokens', 13)}
+            {@render CustomFlagButton('DeveloperRole', 14)}
+            {@render CustomFlagButton('geminiThinking', 15)}
+            {@render CustomFlagButton('geminiBlockOff', 16)}
+        {/if}
+    </Arcodion>
+
+    <Arcodion styled name={language.regexScript}>
+        <RegexList bind:value={DBState.db.presetRegex} buttons />
+    </Arcodion>
+
+    <Arcodion styled name={language.icon}>
+        <div class="p-2 rounded-md border border-darkborderc flex flex-col items-center gap-2">
+            <span>
+                {language.preview}
+            </span>
+            <div class="flex items-center justify-center gap-2">
+                {#if DBState.db.botPresets[DBState.db.botPresetsId]?.image}
+                    <img src={DBState.db.botPresets[DBState.db.botPresetsId]?.image} alt="icon" class="w-6 h-6 rounded-md" decoding="async"/>
+                    <span class="text-textcolor2">{DBState.db.botPresets[DBState.db.botPresetsId]?.name}</span>
+                {:else}
+                    <span class="text-textcolor2">{language.noImages}</span>
+                {/if}
+            </div>
+        </div>
+        <button class="mt-2 text-textcolor2 hover:text-textcolor focus-within:text-textcolor" onclick={async () => {
+            const sel = await selectSingleFile(['png', 'jpg', 'jpeg', 'webp'])
+            const canvas = document.createElement('canvas')
+            const ctx = canvas.getContext('2d')
+            const img = new Image()
+            const blob = new Blob([sel.data], {type: "image/png"})
+            img.src = URL.createObjectURL(blob)
+            await img.decode()
+            canvas.width = 48
+            canvas.height = 48
+            ctx.drawImage(img, 0, 0, 48, 48)
+            const data = canvas.toDataURL('image/jpeg', 0.7)
+            DBState.db.botPresets[DBState.db.botPresetsId].image = data //Since its small (max 2304 pixels), its okay to store it directly
+        }}>
+            <UploadIcon />
+        </button>
     </Arcodion>
     {#if submenu !== -1}
         <Button onclick={() => {$openPresetList = true}} className="mt-4">{language.presets}</Button>

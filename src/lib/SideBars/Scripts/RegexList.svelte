@@ -4,11 +4,14 @@
     import Sortable from "sortablejs";
     import { sleep, sortableOptions } from "src/ts/util";
     import { onDestroy, onMount } from "svelte";
+  import { DownloadIcon, FolderUpIcon, PlusIcon } from "lucide-svelte";
+  import { exportRegex, importRegex } from "src/ts/process/scripts";
     interface Props {
         value?: customscript[];
+        buttons?: boolean
     }
 
-    let { value = $bindable([]) }: Props = $props();
+    let { value = $bindable([]), buttons = false }: Props = $props();
     let stb: Sortable = null
     let ele: HTMLDivElement = $state()
     let sorted = $state(0)
@@ -75,3 +78,23 @@
         {/each}
     </div>
 {/key}
+{#if buttons}
+    <div class="flex gap-2 mt-2">
+        <button class="rounded-md text-textcolor2 hover:text-textcolor focus-within:text-textcolor" onclick={() => {
+            value.push({
+            comment: "",
+            in: "",
+            out: "",
+            type: "editinput"
+            })
+        }}>
+            <PlusIcon />
+        </button>
+        <button class="rounded-md text-textcolor2 hover:text-textcolor focus-within:text-textcolor" onclick={() => {
+            exportRegex(value)
+        }}><DownloadIcon /></button>
+        <button class="rounded-md text-textcolor2 hover:text-textcolor focus-within:text-textcolor" onclick={async () => {
+            value = await importRegex(value)
+        }}><FolderUpIcon /></button>
+    </div>
+{/if}

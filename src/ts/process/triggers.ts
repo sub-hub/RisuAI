@@ -11,7 +11,7 @@ import type { OpenAIChat } from "./index.svelte";
 import { HypaProcesser } from "./memory/hypamemory";
 import { requestChatData } from "./request";
 import { generateAIImage } from "./stableDiff";
-import { writeInlayImage } from "./files/image";
+import { writeInlayImage } from "./files/inlays";
 import { runLua } from "./lua";
 
 
@@ -459,7 +459,7 @@ export async function runTrigger(char:character,mode:triggerMode, arg:{
                         break
                     }
 
-                    const processer = new HypaProcesser('MiniLM')
+                    const processer = new HypaProcesser()
                     const effectValue = risuChatParser(effect.value,{chara:char})
                     const source = risuChatParser(effect.source,{chara:char})
                     await processer.addText(effectValue.split('§'))

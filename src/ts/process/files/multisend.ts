@@ -5,7 +5,7 @@ import { doingChat, sendChat } from '../index.svelte';
 import { downloadFile, isTauri } from 'src/ts/globalApi.svelte';
 import { HypaProcesser } from '../memory/hypamemory';
 import { BufferToText as BufferToText, selectSingleFile, sleep } from 'src/ts/util';
-import { postInlayImage } from './image';
+import { postInlayAsset } from './inlays';
 
 type sendFileArg = {
     file:string
@@ -124,7 +124,7 @@ async function sendPDFFile(arg:sendFileArg) {
         }
     }
     console.log(texts)
-    const hypa = new HypaProcesser('MiniLM')
+    const hypa = new HypaProcesser()
     hypa.addText(texts)
     const result = await hypa.similaritySearch(arg.query)
     let message = ''
@@ -142,7 +142,7 @@ async function sendTxtFile(arg:sendFileArg) {
     const lines = arg.file.split('\n').filter((a) => {
         return a !== ''
     })
-    const hypa = new HypaProcesser('MiniLM')
+    const hypa = new HypaProcesser()
     hypa.addText(lines)
     const result = await hypa.similaritySearch(arg.query)
     let message = ''
@@ -157,7 +157,7 @@ async function sendTxtFile(arg:sendFileArg) {
 }
 
 async function sendXMLFile(arg:sendFileArg) {
-    const hypa = new HypaProcesser('MiniLM')
+    const hypa = new HypaProcesser()
     let nodeTexts:string[] = []
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(arg.file, "text/xml");
@@ -178,11 +178,11 @@ async function sendXMLFile(arg:sendFileArg) {
     return Buffer.from(`<File>\n${message}\n</File>\n`).toString('base64')    
 }
 
-type postFileResult = postFileResultImage | postFileResultVoid | postFileResultText
+type postFileResult = postFileResultAsset | postFileResultVoid | postFileResultText
 
-type postFileResultImage = {
+type postFileResultAsset = {
     data: string,
-    type: 'image',
+    type: 'asset',
 }
 
 type postFileResultVoid = {
@@ -201,6 +201,22 @@ export async function postChatFile(query:string):Promise<postFileResult>{
         'jpeg',
         'png',
         'webp',
+        'gif',
+        'avif',
+
+        //audio format
+        'wav',
+        'mp3',
+        'ogg',
+        'flac',
+
+        //video format
+        'mp4',
+        'webm',
+        'mpeg',
+        'avi',
+
+        //other format
         'po',
         // 'pdf',
         'txt'
@@ -243,14 +259,33 @@ export async function postChatFile(query:string):Promise<postFileResult>{
                 name: file.name
             }
         }
+
+        //image format
         case 'jpg':
         case 'jpeg':
         case 'png':
-        case 'webp':{
-            const postData = await postInlayImage(file)
+        case 'webp':
+        case 'gif':
+        case 'avif':
+            
+        //audio format
+        case 'wav':
+        case 'mp3':
+        case 'ogg':
+        case 'flac':
+            
+        //video format
+        case 'mp4':
+        case 'webm':
+        case 'mpeg':
+        case 'avi':{
+            const postData = await postInlayAsset(file)
+            if(!postData){
+                return null
+            }
             return {
                 data: postData,
-                type: 'image'
+                type: 'asset'
             }
         }
         case 'txt':{

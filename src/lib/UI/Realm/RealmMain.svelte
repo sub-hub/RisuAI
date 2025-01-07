@@ -12,7 +12,7 @@
     let charas:hubType[] = $state([])
 
     let page = $state(0)
-    let sort = $state('')
+    let sort = $state('recommended')
 
     let search = $state('')
     let menuOpen = $state(false)
@@ -27,6 +27,16 @@
         })
     }
 
+    function changeSort(type:string) {
+        if(sort === type){
+            sort = 'recommended'
+        }else{
+            sort = type
+        }
+        page = 0
+        return getHub()
+    }
+
     getHub()
 
 
@@ -36,6 +46,9 @@
         <input bind:value={search} class="peer focus:border-textcolor transition-colors outline-none text-textcolor p-2 min-w-0 border border-r-0 bg-transparent rounded-md rounded-r-none input-text text-xl flex-grow ml-4 border-darkborderc resize-none overflow-y-hidden overflow-x-hidden max-w-full">
             <button
             onclick={() => {
+                if(sort === 'random' || sort === 'recommended'){
+                    sort = ''
+                }
                 page = 0
                 getHub()
             }}
@@ -81,6 +94,7 @@
             getHub()
         }}>
             {
+                sort === 'recommended' ? language.recommended :
                 sort === '' ? language.recent : 
                 sort === 'trending' ? language.trending :
                 sort === 'downloads' ? language.downloads :
@@ -99,26 +113,22 @@
         </button>
         <div class="ml-2 mr-2 h-full border-r border-r-selected"></div>
         <button class="bg-darkbg p-2 rounded-lg ml-2 flex justify-center items-center hover:bg-selected transition-shadow" class:ring={sort === ''} onclick={() => {
-            sort = ''
-            getHub()
+            changeSort('')
         }}>
             {language.recent}
         </button>
         <button class="bg-darkbg p-2 rounded-lg ml-2 flex justify-center items-center hover:bg-selected transition-shadow" class:ring={sort === 'trending'} onclick={() => {
-            sort = 'trending'
-            getHub()
+            changeSort('trending')
         }}>
             {language.trending}
         </button>
         <button class="bg-darkbg p-2 rounded-lg ml-2 flex justify-center items-center hover:bg-selected transition-shadow" class:ring={sort === 'downloads'} onclick={() => {
-            sort = 'downloads'
-            getHub()
+            changeSort('downloads')
         }}>
             {language.downloads}
         </button>
         <button class="bg-darkbg p-2 rounded-lg ml-2 flex justify-center items-center hover:bg-selected transition-shadow min-w-0 max-w-full" class:ring={sort === 'random'} onclick={() => {
-            sort = 'random'
-            getHub()
+            changeSort('random')
         }}>
             {language.random}
         </button>
@@ -132,7 +142,7 @@
         {/each}
     {/key}
 </div>
-{#if sort !== 'random'}
+{#if sort !== 'random' && sort !== 'recommended'}
     <div class="w-full flex justify-center">
         <div class="flex">
             <button class="bg-darkbg h-14 w-14 min-w-14 rounded-lg flex justify-center items-center hover:ring transition-shadow" onclick={() => {
@@ -163,7 +173,7 @@
 
 {#if menuOpen}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="top-0 left-0 z-50 fixed w-full h-full bg-black bg-opacity-50 flex justify-center items-center" onclick={() => {
+    <div class="top-0 left-0 z-50 fixed w-full h-full bg-black bg-opacity-50 flex justify-center items-center" role="button" tabindex="0" onclick={() => {
         menuOpen = false
     }}>
         <div class="max-w-full bg-darkbg rounded-md flex flex-col gap-4 overflow-y-auto p-4">

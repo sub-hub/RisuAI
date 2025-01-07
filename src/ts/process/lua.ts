@@ -6,7 +6,7 @@ import { ReloadGUIPointer, selectedCharID } from "../stores.svelte";
 import { alertError, alertInput, alertNormal } from "../alert";
 import { HypaProcesser } from "./memory/hypamemory";
 import { generateAIImage } from "./stableDiff";
-import { writeInlayImage } from "./files/image";
+import { writeInlayImage } from "./files/inlays";
 import type { OpenAIChat } from "./index.svelte";
 import { requestChatData } from "./request";
 import { v4 } from "uuid";
@@ -213,7 +213,7 @@ export async function runLua(code:string, arg:{
                 if(!LuaLowLevelIds.has(id)){
                     return
                 }
-                const processer = new HypaProcesser('MiniLM')
+                const processer = new HypaProcesser()
                 await processer.addText(value)
                 return await processer.similaritySearch(source)
             })

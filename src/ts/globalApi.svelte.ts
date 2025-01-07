@@ -16,7 +16,7 @@ import {open} from '@tauri-apps/plugin-shell'
 import { setDatabase, type Database, defaultSdDataFunc, getDatabase, type character } from "./storage/database.svelte";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { checkRisuUpdate } from "./update";
-import { MobileGUI, botMakerMode, selectedCharID, loadedStore, DBState } from "./stores.svelte";
+import { MobileGUI, botMakerMode, selectedCharID, loadedStore, DBState, LoadingStatusState } from "./stores.svelte";
 import { loadPlugins } from "./plugins/plugins";
 import { alertConfirm, alertError, alertNormal, alertNormalWait, alertSelect, alertTOS, alertWait } from "./alert";
 import { checkDriverInit, syncDrive } from "./drive/drive";
@@ -42,6 +42,7 @@ import { updateLorebooks } from "./characters";
 import { initMobileGesture } from "./hotkey";
 import { fetch as TauriHTTPFetch } from '@tauri-apps/plugin-http';
 import { moduleUpdate } from "./process/modules";
+import type { AccountStorage } from "./storage/accountStorage";
 
 //@ts-ignore
 export const isTauri = !!window.__TAURI_INTERNALS__
@@ -302,6 +303,9 @@ export async function loadAsset(id:string){
 }
 
 let lastSave = ''
+export let saving = $state({
+    state: false
+})
 
 /**
  * Saves the current state of the database.
@@ -335,6 +339,7 @@ export async function saveDb(){
     $effect.root(() => {
 
         let selIdState = $state(0)
+        let oldSaveHash = ''
 
         selectedCharID.subscribe((v) => {
             selIdState = v
@@ -347,6 +352,7 @@ export async function saveDb(){
                     $state.snapshot(DBState.db[key])
                 }
             }
+
             changed = true
         })
     })
@@ -356,10 +362,11 @@ export async function saveDb(){
     await sleep(1000)
     while(true){
         if(!changed){
-            await sleep(1000)
+            await sleep(500)
             continue
         }
 
+        saving.state = true
         changed = false
 
         try {
@@ -430,6 +437,8 @@ export async function saveDb(){
                 console.error(error)
             }
         }
+
+        saving.state = false
     }
 }
 
@@ -490,6 +499,7 @@ export async function loadData() {
     if(!loaded){
         try {
             if(isTauri){
+                LoadingStatusState.text = "Checking Files..."
                 appWindow.maximize()
                 if(!await exists('', {baseDir: BaseDirectory.AppData})){
                     await mkdir('', {baseDir: BaseDirectory.AppData})
@@ -504,13 +514,18 @@ export async function loadData() {
                     await writeFile('database/database.bin', encodeRisuSaveLegacy({}), {baseDir: BaseDirectory.AppData});
                 }
                 try {
-                    const decoded = await decodeRisuSave(await readFile('database/database.bin',{baseDir: BaseDirectory.AppData}))
+                    LoadingStatusState.text = "Reading Save File..."
+                    const readed = await readFile('database/database.bin',{baseDir: BaseDirectory.AppData})
+                    LoadingStatusState.text = "Decoding Save File..."
+                    const decoded = await decodeRisuSave(readed)
                     setDatabase(decoded)
                 } catch (error) {
+                    LoadingStatusState.text = "Reading Backup Files..."
                     const backups = await getDbBackups()
                     let backupLoaded = false
                     for(const backup of backups){
                         try {
+                            LoadingStatusState.text = `Reading Backup File ${backup}...`
                             const backupData = await readFile(`database/dbbackup-${backup}.bin`,{baseDir: BaseDirectory.AppData})
                             setDatabase(
                                 await decodeRisuSave(backupData)
@@ -524,12 +539,17 @@ export async function loadData() {
                         throw "Your save file is corrupted"
                     }
                 }
+                LoadingStatusState.text = "Checking Update..."
                 await checkRisuUpdate()
                 await changeFullscreen()
     
             }
             else{
+                await forageStorage.Init()
+
+                LoadingStatusState.text = "Loading Local Save File..."
                 let gotStorage:Uint8Array = await forageStorage.getItem('database/database.bin') as unknown as Uint8Array
+                LoadingStatusState.text = "Decoding Local Save File..."
                 if(checkNullish(gotStorage)){
                     gotStorage = encodeRisuSaveLegacy({})
                     await forageStorage.setItem('database/database.bin', gotStorage)
@@ -544,6 +564,7 @@ export async function loadData() {
                     let backupLoaded = false
                     for(const backup of backups){
                         try {
+                            LoadingStatusState.text = `Reading Backup File ${backup}...`
                             const backupData:Uint8Array = await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
                             setDatabase(
                                 await decodeRisuSave(backupData)
@@ -555,8 +576,12 @@ export async function loadData() {
                         throw "Your save file is corrupted"
                     }
                 }
+
                 if(await forageStorage.checkAccountSync()){
-                    let gotStorage:Uint8Array = await forageStorage.getItem('database/database.bin') as unknown as Uint8Array
+                    LoadingStatusState.text = "Checking Account Sync..."
+                    let gotStorage:Uint8Array = await (forageStorage.realStorage as AccountStorage).getItem('database/database.bin', (v) => {
+                        LoadingStatusState.text = `Loading Remote Save File ${(v*100).toFixed(2)}%`
+                    })
                     if(checkNullish(gotStorage)){
                         gotStorage = encodeRisuSaveLegacy({})
                         await forageStorage.setItem('database/database.bin', gotStorage)
@@ -570,6 +595,7 @@ export async function loadData() {
                         let backupLoaded = false
                         for(const backup of backups){
                             try {
+                                LoadingStatusState.text = `Reading Backup File ${backup}...`
                                 const backupData:Uint8Array = await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
                                 setDatabase(
                                     await decodeRisuSave(backupData)
@@ -582,10 +608,14 @@ export async function loadData() {
                         }
                     }
                 }
+                LoadingStatusState.text = "Rechecking Account Sync..."
+                await forageStorage.checkAccountSync()
+                LoadingStatusState.text = "Checking Drive Sync..."
                 const isDriverMode = await checkDriverInit()
                 if(isDriverMode){
                     return
                 }
+                LoadingStatusState.text = "Checking Service Worker..."
                 if(navigator.serviceWorker && (!Capacitor.isNativePlatform())){
                     usingSw = true
                     await registerSw()
@@ -597,13 +627,16 @@ export async function loadData() {
                     characterURLImport()
                 }
             }
+            LoadingStatusState.text = "Checking Unnecessary Files..."
             try {
                 await pargeChunks()
             } catch (error) {}
+            LoadingStatusState.text = "Loading Plugins..."
             try {
                 await loadPlugins()            
             } catch (error) {}
             if(getDatabase().account){
+                LoadingStatusState.text = "Checking Account Data..."
                 try {
                     await loadRisuAccountData()                    
                 } catch (error) {}
@@ -617,8 +650,11 @@ export async function loadData() {
             } catch (error) {
                 
             }
+            LoadingStatusState.text = "Checking For Format Update..."
             await checkNewFormat()
             const db = getDatabase();
+
+            LoadingStatusState.text = "Updating States..."
             updateColorScheme()
             updateTextThemeAndCSS()
             updateAnimationSpeed()
@@ -1045,6 +1081,14 @@ export function getUnpargeables(db: Database, uptype: 'basename' | 'pure' = 'bas
         db.personas.map((v) => {
             addUnparge(v.icon);
         });
+    }
+
+    if(db.characterOrder){
+        db.characterOrder.forEach((item) => {
+            if (typeof item === 'object' && 'imgFile' in item) {
+                addUnparge(item.imgFile);
+            }
+        })
     }
     return unpargeable;
 }
@@ -1809,24 +1853,84 @@ const pipeFetchLog = (fetchLogIndex: number, readableStream: ReadableStream<Uint
  * @throws {Error} - Throws an error if the request is aborted or if there is an error in the response.
  */
 export async function fetchNative(url:string, arg:{
-    body:string,
+    body?:string|Uint8Array|ArrayBuffer,
     headers?:{[key:string]:string},
-    method?:"POST",
+    method?:"POST"|"GET"|"PUT"|"DELETE",
     signal?:AbortSignal,
     useRisuTk?:boolean,
     chatId?:string
-}):Promise<{ body: ReadableStream<Uint8Array>; headers: Headers; status: number }> {
+}):Promise<Response> {
+
+    console.log(arg.body,'body')
+    if(arg.body === undefined && (arg.method === 'POST' || arg.method === 'PUT') ){
+        throw new Error('Body is required for POST and PUT requests')
+    }
+
+    const jsonizer = (body:ReadableStream<Uint8Array>) => {
+        return async () => {
+            const text = await textifyReadableStream(body)
+            return JSON.parse(text)
+        }
+    }
+    const textizer = (body:ReadableStream<Uint8Array>) => {
+        return async () => {
+            const text = await textifyReadableStream(body)
+            return text
+        }
+    }
+    const arrayBufferizer = (body:ReadableStream<Uint8Array>) => {
+        return async () => {
+            const chunks:Uint8Array[] = []
+            const reader = body.getReader()
+            while(true){
+                const {done, value} = await reader.read()
+                if(done){
+                    break
+                }
+                chunks.push(value)
+            }
+            const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
+            const arrayBuffer = new Uint8Array(totalLength)
+            let offset = 0
+            for(const chunk of chunks){
+                arrayBuffer.set(chunk, offset)
+                offset += chunk.length
+            }
+            return arrayBuffer.buffer
+        }
+    }
+
+    arg.method = arg.method ?? 'POST'
+
     let headers = arg.headers ?? {}
+    let realBody:Uint8Array
+
+    if(arg.method === 'GET' || arg.method === 'DELETE'){
+        realBody = undefined
+    }
+    else if(typeof arg.body === 'string'){
+        realBody = new TextEncoder().encode(arg.body)
+    }
+    else if(arg.body instanceof Uint8Array){
+        realBody = arg.body
+    }
+    else if(arg.body instanceof ArrayBuffer){
+        realBody = new Uint8Array(arg.body)
+    }
+    else{
+        throw new Error('Invalid body type')
+    }
+
     const db = getDatabase()
     let throughProxy = (!isTauri) && (!isNodeServer) && (!db.usePlainFetch)
     let fetchLogIndex = addFetchLog({
-        body: arg.body,
+        body: new TextDecoder().decode(realBody),
         headers: arg.headers,
         response: 'Streamed Fetch',
         success: true,
         url: url,
         resType: 'stream',
-        chatId: arg.chatId
+        chatId: arg.chatId,
     })
     if(isTauri){
         fetchIndex++
@@ -1849,7 +1953,8 @@ export async function fetchNative(url:string, arg:{
                 id: fetchId,
                 url: url,
                 headers: JSON.stringify(headers),
-                body: arg.body,
+                body: Buffer.from(realBody).toString('base64'),
+                method: arg.method
             }).then((res) => {
                 try {
                     const parsedRes = JSON.parse(res as string)
@@ -1868,7 +1973,7 @@ export async function fetchNative(url:string, arg:{
                 id: fetchId,
                 url: url,
                 headers: headers,
-                body: Buffer.from(arg.body).toString('base64'),
+                body: Buffer.from(realBody).toString('base64'),
             }).then((res) => {
                 if(!res.success){
                     error = res.error
@@ -1915,17 +2020,17 @@ export async function fetchNative(url:string, arg:{
             throw new Error(error)
         }
 
-        return {
-            body: readableStream,
+        return new Response(readableStream, {
             headers: new Headers(resHeaders),
             status: status
-        }
+        })
 
 
     }
     else if(throughProxy){
+
         const r = await fetch(hubURL + `/proxy2`, {
-            body: arg.body,
+            body: realBody,
             headers: arg.useRisuTk ? {
                 "risu-header": encodeURIComponent(JSON.stringify(headers)),
                 "risu-url": encodeURIComponent(url),
@@ -1936,22 +2041,21 @@ export async function fetchNative(url:string, arg:{
                 "risu-url": encodeURIComponent(url),
                 "Content-Type": "application/json"
             },
-            method: "POST",
+            method: arg.method,
             signal: arg.signal
         })
 
-        return {
-            body: pipeFetchLog(fetchLogIndex, r.body),
+        return new Response(r.body, {
             headers: r.headers,
             status: r.status
-        }
+        })
     }
     else{
         return await fetch(url, {
-            body: arg.body,
+            body: realBody,
             headers: headers,
             method: arg.method,
-            signal: arg.signal
+            signal: arg.signal,
         })
     }
 }
@@ -2165,4 +2269,36 @@ export class PerformanceDebugger{
             this.kv[key].push(...other.kv[key])
         }
     }
+}
+
+export function getLanguageCodes(){
+    let languageCodes:{
+        code: string
+        name: string
+    }[] = []
+
+    for(let i=0x41;i<=0x5A;i++){
+        for(let j=0x41;j<=0x5A;j++){
+            languageCodes.push({
+                code: String.fromCharCode(i) + String.fromCharCode(j),
+                name: ''
+            })
+        }
+    }
+    
+    languageCodes = languageCodes.map(v => {
+        return {
+            code: v.code.toLocaleLowerCase(),
+            name: new Intl.DisplayNames([
+                DBState.db.language === 'cn' ? 'zh' : DBState.db.language
+            ], {
+                type: 'language',
+                fallback: 'none'
+            }).of(v.code)
+        }
+    }).filter((a) => {
+        return a.name
+    }).sort((a, b) => a.name.localeCompare(b.name))
+
+    return languageCodes
 }

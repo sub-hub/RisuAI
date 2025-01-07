@@ -23,6 +23,7 @@
     FolderOpenIcon,
     HomeIcon,
     WrenchIcon,
+    User2Icon,
   } from "lucide-svelte";
     import {
   addCharacter,
@@ -36,9 +37,9 @@
     import SidebarAvatar from "./SidebarAvatar.svelte";
     import BaseRoundedButton from "../UI/BaseRoundedButton.svelte";
     import { get } from "svelte/store";
-    import { getCharacterIndexObject } from "src/ts/util";
+    import { getCharacterIndexObject, selectSingleFile } from "src/ts/util";
     import { v4 } from "uuid";
-    import { checkCharOrder } from "src/ts/globalApi.svelte";
+    import { checkCharOrder, getFileSrc, saveAsset } from "src/ts/globalApi.svelte";
     import { alertInput, alertSelect } from "src/ts/alert";
     import SideChatList from "./SideChatList.svelte";
     import { ConnectionIsHost, ConnectionOpenStore, RoomIdStore } from "src/ts/sync/multiuser";
@@ -58,7 +59,7 @@
   }
 
   type sortTypeNormal = { type:'normal',img: string, index: number, name:string }
-  type sortType =  sortTypeNormal|{type:'folder',folder:sortTypeNormal[],id:string, name:string, color:string}
+  type sortType =  sortTypeNormal|{type:'folder',folder:sortTypeNormal[],id:string, name:string, color:string, img?:string}
   let charImages: sortType[] = $state([]);
   let IconRounded = $state(false)
   let openFolders:string[] = $state([])
@@ -108,7 +109,8 @@
           type: "folder",
           id: folder.id,
           name: folder.name,
-          color: folder.color
+          color: folder.color,
+          img: folder.img,
         });
       }
     }
@@ -292,7 +294,79 @@
     return false
   }
 </script>
+{#if DBState.db.menuSideBar}
+<div
+  class="h-full w-20 min-w-20 flex-col items-center bg-bgcolor text-textcolor shadow-lg relative rs-sidebar"
+  class:editMode
+  class:risu-sub-sidebar={$sideBarClosing}
+  class:risu-sub-sidebar-close={$sideBarClosing}
+  class:hidden={hidden}
+  class:flex={!hidden}
+>
+<button
+  class="flex items-center justify-center py-2 flex-col gap-1 w-full mt-4"
+  class:text-textcolor2={!(
+    $selectedCharID < 0 &&
+    $PlaygroundStore === 0 &&
+    !$settingsOpen
+  )}
+  onclick={() => {
+    reseter();
+    selectedCharID.set(-1)
+    PlaygroundStore.set(0)
+    OpenRealmStore.set(false)
+  }}
+>
+  <HomeIcon />
+  <span class="text-xs">{language.home}</span>
+</button>
+<button
+  class="flex items-center justify-center py-2 flex-col gap-1 w-full"
+  class:text-textcolor2={!$settingsOpen}
+  onclick={() => {
+    if ($settingsOpen) {
+      reseter();
+      settingsOpen.set(false);
+    } else {
+      reseter();
+      settingsOpen.set(true);
+    }
+  }}
+>
+  <Settings />
+  <span class="text-xs">{language.settings}</span>
+</button>
+<button
+  class="flex items-center justify-center py-2 flex-col gap-1 w-full"
+  class:text-textcolor2={!(
+    $selectedCharID >= 0
+  )}
+  onclick={() => {
+    reseter();
+    openGrid();
 
+  }}
+>
+  <User2Icon />
+  <span class="text-xs">{language.character}</span>
+</button>
+<button
+  class="flex items-center justify-center py-2 flex-col gap-1 w-full"
+  class:text-textcolor2={!(
+    $selectedCharID < 0 &&
+    $PlaygroundStore !== 0
+  )}
+  onclick={() => {
+    reseter();
+    selectedCharID.set(-1)
+    PlaygroundStore.set(1)
+  }}
+>
+  <ShellIcon />
+  <span class="text-xs">{language.playground}</span>
+</button>
+</div>
+{:else}
 <div
   class="h-full w-20 min-w-20 flex-col items-center bg-bgcolor text-textcolor shadow-lg relative rs-sidebar"
   class:editMode
@@ -352,7 +426,7 @@
     {/if}
   </div>
   <div class="flex flex-grow w-full flex-col items-center overflow-x-hidden overflow-y-auto pr-0">
-    <div class="h-4 min-h-4 w-14" ondragover={(e) => {
+    <div class="h-4 min-h-4 w-14" role="listitem" ondragover={(e) => {
       e.preventDefault()
       e.dataTransfer.dropEffect = 'move'
       e.currentTarget.classList.add('bg-green-500')
@@ -368,6 +442,7 @@
     }} ondragenter={preventAll}></div>
     {#each charImages as char, ind}
       <div class="group relative flex items-center px-2"
+        role="listitem"
         draggable="true"
         ondragstart={(e) => {avatarDragStart({index:ind}, e)}}
         ondragover={avatarDragOver}
@@ -379,6 +454,7 @@
         />
         <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
         <div
+            role="button" tabindex="0"
             onclick={() => {
               if(char.type === "normal"){
                 changeChar(char.index, {reseter});
@@ -391,17 +467,16 @@
                 }
               }
             }}
-            tabindex="0"
           >
           {#if char.type === 'normal'}
             <SidebarAvatar src={char.img ? getCharImage(char.img, "plain") : "/none.webp"} size="56" rounded={IconRounded} name={char.name} />
           {:else if char.type === "folder"}
             {#key char.color}
             {#key char.name}
-              <SidebarAvatar src="slot" size="56" rounded={IconRounded} bordered name={char.name} color={char.color}
+              <SidebarAvatar src="slot" size="56" rounded={IconRounded} bordered name={char.name} color={char.color} backgroundimg={char.img}
               oncontextmenu={async (e) => {
                 e.preventDefault()
-                const sel = parseInt(await alertSelect([language.renameFolder,language.changeFolderColor,language.cancel]))
+                const sel = parseInt(await alertSelect([language.renameFolder,language.changeFolderColor,language.changeFolderImage,language.cancel]))
                 if(sel === 0){
                   const v = await alertInput(language.changeFolderName)
                   const db = DBState.db
@@ -426,6 +501,40 @@
                   oder.color = colors[sel].toLocaleLowerCase()
                   db.characterOrder[ind] = oder
                   setDatabase(db)
+                }
+                else if(sel === 2) {
+                  const sel = parseInt(await alertSelect(['Reset to Default Image', 'Select Image File']))
+                  const db = DBState.db
+                  const oder = db.characterOrder[ind]
+                  if(typeof(oder) === 'string'){
+                    return
+                  }
+
+                  switch (sel) {
+                    case 0:
+                      oder.imgFile = null
+                      oder.img = ''
+                      break;
+                  
+                    case 1:
+                      const folderImage = await selectSingleFile([
+                        'png',
+                        'jpg',
+                        'webp',
+                      ])
+
+                      if(!folderImage) {
+                        return
+                      }
+
+                      const folderImageData = await saveAsset(folderImage.data)
+
+                      oder.imgFile = folderImageData
+                      oder.img = await getFileSrc(folderImageData)
+                      db.characterOrder[ind] = oder
+                      setDatabase(db)
+                      break;
+                  }
                 }
               }}
               onClick={() => {
@@ -463,7 +572,7 @@
           class:bg-indigo-700={char.color === 'indigo'}
           class:bg-purple-700={char.color === 'purple'}
           class:bg-pink-700={char.color === 'pink'}></div>
-          <div class="h-4 min-h-4 w-14 relative z-10" ondragover={(e) => {
+          <div class="h-4 min-h-4 w-14 relative z-10" role="listitem" ondragover={(e) => {
             e.preventDefault()
             e.dataTransfer.dropEffect = 'move'
             e.currentTarget.classList.add('bg-green-500')
@@ -479,6 +588,7 @@
           }} ondragenter={preventAll}></div>
           {#each char.folder as char2, ind}
               <div class="group relative flex items-center px-2 z-10"
+              role="listitem"
               draggable="true"
               ondragstart={(e) => {if(char.type === 'folder'){avatarDragStart({index: ind, folder:char.id}, e)}}}
               ondragover={avatarDragOver}
@@ -490,6 +600,7 @@
               />
               <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
               <div
+                  role="button" tabindex="0"
                   onclick={() => {
                     if(char2.type === "normal"){
                       changeChar(char2.index, {reseter});
@@ -502,12 +613,11 @@
                       }
                     }
                   }}
-                  tabindex="0"
                 >
                 <SidebarAvatar src={char2.img ? getCharImage(char2.img, "plain") : "/none.webp"} size="56" rounded={IconRounded} name={char2.name}/>
               </div>
             </div>
-            <div class="h-4 min-h-4 w-14 relative z-20" ondragover={(e) => {
+            <div class="h-4 min-h-4 w-14 relative z-20" role="listitem" ondragover={(e) => {
               e.preventDefault()
               e.dataTransfer.dropEffect = 'move'
               e.currentTarget.classList.add('bg-green-500')
@@ -525,7 +635,7 @@
         </div>
         {/key}
       {/if}
-      <div class="h-4 min-h-4 w-14" ondragover={((e) => {
+      <div class="h-4 min-h-4 w-14" role="listitem" ondragover={((e) => {
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
         e.currentTarget.classList.add('bg-green-500')
@@ -559,6 +669,7 @@
     </div>
   </div>
 </div>
+{/if}
 <div
   class="setting-area h-full flex-col overflow-y-auto overflow-x-hidden bg-darkbg py-6 text-textcolor max-h-full"
   class:risu-sidebar={!$sideBarClosing}
@@ -648,12 +759,17 @@
 </div>
 
 {#if $DynamicGUI}
-    <div class="flex-grow h-full min-w-12" class:hidden={hidden} onclick={() => {
+    <div role="button" tabindex="0" class="flex-grow h-full min-w-12" class:hidden={hidden} onclick={() => {
       if($sideBarClosing){
         return
       }
       $sideBarClosing = true;
     }}
+      onkeydown={(e)=>{
+        if(e.key === 'Enter'){
+            e.currentTarget.click()
+        }
+      }}
       class:sidebar-dark-animation={!$sideBarClosing}
       class:sidebar-dark-close-animation={$sideBarClosing}>
 

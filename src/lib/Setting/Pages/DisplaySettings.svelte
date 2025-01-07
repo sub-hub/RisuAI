@@ -18,6 +18,7 @@
   import Arcodion from "src/lib/UI/Arcodion.svelte";
   import Button from "src/lib/UI/GUI/Button.svelte";
   import { CustomGUISettingMenuStore } from "src/ts/stores.svelte";
+  import { alertError } from "src/ts/alert";
 
     const onSchemeInputChange = (e:Event) => {
         changeColorScheme((e.target as HTMLInputElement).value)
@@ -201,7 +202,7 @@
     <SliderInput  min={50} max={200} bind:value={DBState.db.zoomsize} marginBottom/>
 
     <span class="text-textcolor">{language.lineHeight}</span>
-    <SliderInput  min={0.5} max={3} step={0.05} bind:value={DBState.db.lineHeight} marginBottom/>
+    <SliderInput  min={0.5} max={3} step={0.05} fixed={2} bind:value={DBState.db.lineHeight} marginBottom/>
 
     <span class="text-textcolor">{language.iconSize}</span>
     <SliderInput min={50} max={200} bind:value={DBState.db.iconsize} marginBottom/>
@@ -299,6 +300,14 @@
         <Check bind:check={DBState.db.textScreenRounded} name={language.textScreenRound}/>
     </div>
 
+    <div class="flex items-center mt-2">
+        <Check bind:check={DBState.db.showSavingIcon} name={language.showSavingIcon}/>
+    </div>
+
+    <div class="flex items-center mt-2">
+        <Check bind:check={DBState.db.showPromptComparison} name={language.showPromptComparison}/>
+    </div>
+
     {#if DBState.db.textScreenBorder}
         <div class="flex items-center mt-2">
             <Check check={true} onChange={() => {
@@ -360,6 +369,31 @@
     <div class="flex items-center mt-2">
         <Check bind:check={DBState.db.betaMobileGUI} name={language.betaMobileGUI}/>
         <Help key="betaMobileGUI"/>
+    </div>
+
+    <div class="flex items-center mt-2">
+        <Check bind:check={DBState.db.menuSideBar} name={language.menuSideBar}/>
+    </div>
+
+    <div class="flex items-center mt-2">
+        <Check bind:check={DBState.db.notification} name={language.notification} onChange={async (e) => {
+            let hasPermission = {state: 'denied'}
+            try {
+                hasPermission = await navigator.permissions.query({name: 'notifications'})                
+            } catch (error) {
+                //for browsers that do not support permissions api
+            }
+            if(!DBState.db.notification){
+                return
+            }
+            if(hasPermission.state === 'denied'){
+                const permission = await Notification.requestPermission()
+                if(permission === 'denied'){
+                    alertError(language.permissionDenied)
+                    DBState.db.notification = false
+                }
+            }
+        }}/>
     </div>
 
     {#if DBState.db.showUnrecommended}

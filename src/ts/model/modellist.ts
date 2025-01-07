@@ -1,4 +1,5 @@
 import type { Parameter } from "../process/request"
+import { getDatabase } from "../storage/database.svelte"
 
 export enum LLMFlags{
     hasImageInput,
@@ -12,6 +13,12 @@ export enum LLMFlags{
     hasStreaming,
     requiresAlternateRole,
     mustStartWithUserInput,
+    poolSupported,
+    hasVideoInput,
+    OAICompletionTokens,
+    DeveloperRole,
+    geminiThinking,
+    geminiBlockOff
 }
 
 export enum LLMProvider{
@@ -51,6 +58,22 @@ export enum LLMFormat{
     AWSBedrockClaude
 }
 
+export enum LLMTokenizer{
+    Unknown,
+    tiktokenCl100kBase,
+    tiktokenO200Base,
+    Mistral,
+    Llama,
+    NovelAI,
+    Claude,
+    NovelList,
+    Llama3,
+    Gemma,
+    GoogleCloud,
+    Cohere,
+    Local
+}
+
 export interface LLMModel{
     id: string
     name: string
@@ -60,7 +83,8 @@ export interface LLMModel{
     provider: LLMProvider
     flags: LLMFlags[]
     format: LLMFormat
-    parameters: Parameter[]
+    parameters: Parameter[],
+    tokenizer: LLMTokenizer
     recommended?: boolean
 }
 
@@ -91,6 +115,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.OpenAICompatible,
         flags: [LLMFlags.hasFullSystemPrompt, LLMFlags.hasStreaming],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'instructgpt35',
@@ -100,6 +125,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.OpenAILegacyInstruct,
         flags: [LLMFlags.hasFullSystemPrompt, LLMFlags.hasStreaming],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt4_turbo',
@@ -109,6 +135,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.OpenAICompatible,
         flags: [LLMFlags.hasFullSystemPrompt, LLMFlags.hasStreaming],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt4o',
@@ -123,6 +150,7 @@ export const LLMModels: LLMModel[] = [
         ],
         recommended: true,
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenO200Base
     },
     {
         id: 'gpt4om',
@@ -137,6 +165,7 @@ export const LLMModels: LLMModel[] = [
         ],
         recommended: true,
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenO200Base
     },
     {
         id: 'gpt4',
@@ -149,6 +178,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt4_32k',
@@ -161,6 +191,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt35_16k',
@@ -173,6 +204,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt4_0314',
@@ -185,6 +217,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt4_0613',
@@ -197,6 +230,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt4_32k_0613',
@@ -209,6 +243,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt4_1106',
@@ -221,6 +256,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt35_0125',
@@ -233,6 +269,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt35_1106',
@@ -245,6 +282,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt35_0613',
@@ -257,6 +295,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt35_16k_0613',
@@ -269,6 +308,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt35_0301',
@@ -281,6 +321,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt4_0125',
@@ -293,6 +334,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gptvi4_1106',
@@ -305,6 +347,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt4_turbo_20240409',
@@ -317,6 +360,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenCl100kBase
     },
     {
         id: 'gpt4o-2024-05-13',
@@ -330,6 +374,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenO200Base
     },
     {
         id: 'gpt4o-2024-08-06',
@@ -343,6 +388,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenO200Base
     },
     {
         id: 'gpt4o-2024-11-20',
@@ -356,6 +402,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenO200Base
     },
     {
         id: 'gpt4o-chatgpt',
@@ -366,9 +413,10 @@ export const LLMModels: LLMModel[] = [
         flags: [
             LLMFlags.hasImageInput,
             LLMFlags.hasFullSystemPrompt,
-            LLMFlags.hasStreaming
+            LLMFlags.hasStreaming,
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenO200Base
     },
     {
         id: 'gpt4o1-preview',
@@ -377,10 +425,11 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.OpenAI,
         format: LLMFormat.OpenAICompatible,
         flags: [
-            LLMFlags.hasFullSystemPrompt,
-            LLMFlags.hasStreaming
+            LLMFlags.hasStreaming,
+            LLMFlags.OAICompletionTokens
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenO200Base
     },
     {
         id: 'gpt4o1-mini',
@@ -389,10 +438,27 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.OpenAI,
         format: LLMFormat.OpenAICompatible,
         flags: [
-            LLMFlags.hasFullSystemPrompt,
-            LLMFlags.hasStreaming
+            LLMFlags.hasStreaming,
+            LLMFlags.OAICompletionTokens
         ],
         parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenO200Base
+    },
+    {
+        id: 'o1',
+        internalID: 'o1',
+        name: 'o1',
+        provider: LLMProvider.OpenAI,
+        format: LLMFormat.OpenAICompatible,
+        flags: [
+            LLMFlags.hasStreaming,
+            LLMFlags.OAICompletionTokens,
+            LLMFlags.hasFullSystemPrompt,
+            LLMFlags.hasImageInput,
+            LLMFlags.DeveloperRole
+        ],
+        parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.tiktokenO200Base
     },
     {
         name: "Claude 3.5 Sonnet",
@@ -408,6 +474,7 @@ export const LLMModels: LLMModel[] = [
         ],
         recommended: true,
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: "Claude 3.5 Haiku",
@@ -423,6 +490,7 @@ export const LLMModels: LLMModel[] = [
         ],
         recommended: true,
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 3.5 Sonnet (20241022)',
@@ -437,6 +505,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: "Claude 3.5 Haiku (20241022)",
@@ -451,6 +520,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 3 Haiku (20240307)',
@@ -465,6 +535,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 3.5 Sonnet (20240620)',
@@ -479,6 +550,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 3 Opus (20240229)',
@@ -493,6 +565,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 3 Sonnet (20240229)',
@@ -507,6 +580,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasStreaming
         ],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 2.1',
@@ -517,6 +591,7 @@ export const LLMModels: LLMModel[] = [
             LLMFlags.hasPrefill,
         ],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 2',
@@ -525,6 +600,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AnthropicLegacy,
         flags: [LLMFlags.hasPrefill],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 2 100k',
@@ -533,6 +609,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AnthropicLegacy,
         flags: [LLMFlags.hasPrefill],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude v1',
@@ -541,6 +618,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AnthropicLegacy,
         flags: [LLMFlags.hasPrefill],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude v1 100k',
@@ -549,6 +627,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AnthropicLegacy,
         flags: [LLMFlags.hasPrefill],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude Instant v1',
@@ -557,6 +636,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AnthropicLegacy,
         flags: [LLMFlags.hasPrefill],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude Instant v1 100k',
@@ -565,6 +645,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AnthropicLegacy,
         flags: [LLMFlags.hasPrefill],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude v1.2',
@@ -573,6 +654,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AnthropicLegacy,
         flags: [LLMFlags.hasPrefill],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude v1.0',
@@ -581,6 +663,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AnthropicLegacy,
         flags: [LLMFlags.hasPrefill],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 3.5 Sonnet (20241022) v2',
@@ -589,6 +672,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AWSBedrockClaude,
         flags: [LLMFlags.hasPrefill, LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 3.5 Sonnet (20240620) v1',
@@ -597,6 +681,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AWSBedrockClaude,
         flags: [LLMFlags.hasPrefill, LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Claude 3 Opus (20240229) v1',
@@ -605,6 +690,7 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.AWSBedrockClaude,
         flags: [LLMFlags.hasPrefill, LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
         parameters: ClaudeParameters,
+        tokenizer: LLMTokenizer.Claude
     },
     {
         name: 'Ooba',
@@ -613,7 +699,8 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.Ooba,
         flags: [LLMFlags.hasFirstSystemPrompt],
         recommended: true,
-        parameters: []
+        parameters: [],
+        tokenizer: LLMTokenizer.Llama
     },
     {
         name: 'Mancer',
@@ -621,7 +708,8 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.AsIs,
         format: LLMFormat.OobaLegacy,
         flags: [LLMFlags.hasFirstSystemPrompt],
-        parameters: []
+        parameters: [],
+        tokenizer: LLMTokenizer.Llama
     },
     {
         name: 'OpenRouter',
@@ -630,7 +718,8 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.OpenAICompatible,
         flags: [LLMFlags.hasFullSystemPrompt, LLMFlags.hasImageInput, LLMFlags.hasStreaming],
         parameters: ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k'],
-        recommended: true
+        recommended: true,
+        tokenizer: LLMTokenizer.Unknown
     },
     {
         name: 'Mistral Small Latest',
@@ -640,7 +729,8 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.Mistral,
         flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.mustStartWithUserInput, LLMFlags.requiresAlternateRole],
         recommended: true,
-        parameters: ['temperature', 'presence_penalty', 'frequency_penalty']
+        parameters: ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'],
+        tokenizer: LLMTokenizer.Mistral
     },
     {
         name: 'Mistral Medium Latest',
@@ -650,7 +740,8 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.Mistral,
         flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.mustStartWithUserInput, LLMFlags.requiresAlternateRole],
         recommended: true,
-        parameters: ['temperature', 'presence_penalty', 'frequency_penalty']
+        parameters: ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'],
+        tokenizer: LLMTokenizer.Mistral
     },
     {
         name: 'Mistral Large 2411',
@@ -659,7 +750,8 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.Mistral,
         format: LLMFormat.Mistral,
         flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.mustStartWithUserInput, LLMFlags.requiresAlternateRole],
-        parameters: ['temperature', 'presence_penalty', 'frequency_penalty']
+        parameters: ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'],
+        tokenizer: LLMTokenizer.Mistral
     },
     {
         name: 'Mistral Nemo',
@@ -668,7 +760,8 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.Mistral,
         format: LLMFormat.Mistral,
         flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.mustStartWithUserInput, LLMFlags.requiresAlternateRole],
-        parameters: ['temperature', 'presence_penalty', 'frequency_penalty']
+        parameters: ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'],
+        tokenizer: LLMTokenizer.Mistral
     },
     {
         name: 'Mistral Large Latest',
@@ -677,43 +770,76 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.Mistral,
         format: LLMFormat.Mistral,
         flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.mustStartWithUserInput, LLMFlags.requiresAlternateRole],
-        parameters: ['temperature', 'presence_penalty', 'frequency_penalty'],
-        recommended: true
+        parameters: ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'],
+        recommended: true,
+        tokenizer: LLMTokenizer.Mistral
     },
     {
         name: "Gemini Pro 1.5 0827",
         id: 'gemini-1.5-pro-exp-0827',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters:  ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole],
+        parameters:  ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
     },
     {
         name: "Gemini Exp 1121",
         id: 'gemini-exp-1121',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        recommended: true,
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.poolSupported, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud,
+    },
+    {
+        name: "Gemini Exp 1206",
+        id: 'gemini-exp-1206',
+        provider: LLMProvider.GoogleCloud,
+        format: LLMFormat.GoogleCloud,
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.poolSupported, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
+    },
+    {
+        name: "Gemini Flash 2.0 Exp",
+        id: 'gemini-2.0-flash-exp',
+        provider: LLMProvider.GoogleCloud,
+        format: LLMFormat.GoogleCloud,
+        flags: [LLMFlags.geminiBlockOff,LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.poolSupported, LLMFlags.hasAudioInput, LLMFlags.hasVideoInput,  LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'],
+        tokenizer: LLMTokenizer.GoogleCloud,
+        recommended: true
+    },
+    {
+        name: "Gemini Flash 2.0 Thinking 1219",
+        id: 'gemini-2.0-flash-thinking-exp-1219',
+        provider: LLMProvider.GoogleCloud,
+        format: LLMFormat.GoogleCloud,
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.poolSupported, LLMFlags.hasAudioInput, LLMFlags.hasVideoInput,  LLMFlags.hasStreaming, LLMFlags.geminiThinking, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'],
+        tokenizer: LLMTokenizer.GoogleCloud,
+        recommended: true
     },
     {
         name: "Gemini Pro 1.5",
         id: 'gemini-1.5-pro-latest',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt,  LLMFlags.hasStreaming, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
         recommended: true,
-        parameters: ['temperature', 'top_k', 'top_p']
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
     },
     {
         name: "Gemini Flash 1.5",
         id: 'gemini-1.5-flash',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
         recommended: true,
-        parameters: ['temperature', 'top_k', 'top_p']
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
     },
     {
         name: "Gemini Exp 1121",
@@ -721,8 +847,9 @@ export const LLMModels: LLMModel[] = [
         internalID: 'gemini-exp-1121',
         provider: LLMProvider.VertexAI,
         format: LLMFormat.VertexAIGemini,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.Gemma
     },
     {
         name: "Gemini Pro 1.5",
@@ -730,8 +857,9 @@ export const LLMModels: LLMModel[] = [
         internalID: 'gemini-1.5-pro-latest',
         provider: LLMProvider.VertexAI,
         format: LLMFormat.VertexAIGemini,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.Gemma
     },
     {
         name: "Gemini Flash 1.5",
@@ -739,64 +867,72 @@ export const LLMModels: LLMModel[] = [
         internalID: 'gemini-1.5-flash',
         provider: LLMProvider.VertexAI,
         format: LLMFormat.VertexAIGemini,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.Gemma
     },
     {
         name: "Gemini Exp 1114",
         id: 'gemini-exp-1114',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
     },
     {
         name: "Gemini Pro 1.5 002",
         id: 'gemini-1.5-pro-002',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
     },
     {
         name: "Gemini Flash 1.5 002",
         id: 'gemini-1.5-flash-002',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
     },
     {
         name: "Gemini Pro",
         id: 'gemini-pro',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
     },
     {
         name: "Gemini Pro Vision",
         id: 'gemini-pro-vision',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
     },
     {
         name: "Gemini Ultra",
         id: 'gemini-ultra',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
     },
     {
         name: "Gemini Ultra Vision",
         id: 'gemini-ultra-vision',
         provider: LLMProvider.GoogleCloud,
         format: LLMFormat.GoogleCloud,
-        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt],
-        parameters: ['temperature', 'top_k', 'top_p']
+        flags: [LLMFlags.hasImageInput, LLMFlags.hasFirstSystemPrompt, LLMFlags.hasStreaming, LLMFlags.requiresAlternateRole],
+        parameters: ['temperature', 'top_k', 'top_p'],
+        tokenizer: LLMTokenizer.GoogleCloud
     },
     {
         name: 'Kobold',
@@ -811,7 +947,8 @@ export const LLMModels: LLMModel[] = [
             'repetition_penalty',
             'top_k',
             'top_a'
-        ]
+        ],
+        tokenizer: LLMTokenizer.Unknown
     },
     {
         name: "SuperTrin",
@@ -819,7 +956,8 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.NovelList,
         format: LLMFormat.NovelList,
         flags: [],
-        parameters: []
+        parameters: [],
+        tokenizer: LLMTokenizer.NovelList
     },
     {
         name: "Damsel",
@@ -827,7 +965,8 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.NovelList,
         format: LLMFormat.NovelList,
         flags: [],
-        parameters: []
+        parameters: [],
+        tokenizer: LLMTokenizer.NovelList
     },
     {
         name: "Command R",
@@ -839,7 +978,8 @@ export const LLMModels: LLMModel[] = [
         recommended: true,
         parameters: [
             'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ]
+        ],
+        tokenizer: LLMTokenizer.Cohere
     },
     {
         name: "Command R Plus",
@@ -851,7 +991,8 @@ export const LLMModels: LLMModel[] = [
         recommended: true,
         parameters: [
             'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ]
+        ],
+        tokenizer: LLMTokenizer.Cohere
     },
     {
         name: "Command R 08-2024",
@@ -862,7 +1003,8 @@ export const LLMModels: LLMModel[] = [
         flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput],
         parameters: [
             'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ]
+        ],
+        tokenizer: LLMTokenizer.Cohere
     },
     {
         name: "Command R 03-2024",
@@ -873,7 +1015,8 @@ export const LLMModels: LLMModel[] = [
         flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput],
         parameters: [
             'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ]
+        ],
+        tokenizer: LLMTokenizer.Cohere
     },
     {
         name: "Command R Plus 08-2024",
@@ -884,7 +1027,8 @@ export const LLMModels: LLMModel[] = [
         flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput],
         parameters: [
             'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ]
+        ],
+        tokenizer: LLMTokenizer.Cohere
     },
     {
         name: "Command R Plus 04-2024",
@@ -895,7 +1039,8 @@ export const LLMModels: LLMModel[] = [
         flags: [LLMFlags.hasFirstSystemPrompt, LLMFlags.requiresAlternateRole, LLMFlags.mustStartWithUserInput],
         parameters: [
             'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ]
+        ],
+        tokenizer: LLMTokenizer.Cohere
     },
     {
         name: "Clio",
@@ -906,7 +1051,8 @@ export const LLMModels: LLMModel[] = [
         recommended: true,
         parameters: [
             'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ]
+        ],
+        tokenizer: LLMTokenizer.NovelAI
     },
     {
         name: "Kayra",
@@ -917,7 +1063,8 @@ export const LLMModels: LLMModel[] = [
         recommended: true,
         parameters: [
             'temperature', 'top_k', 'top_p', 'presence_penalty', 'frequency_penalty'
-        ]
+        ],
+        tokenizer: LLMTokenizer.NovelAI
     },
     {
         id: 'ollama-hosted',
@@ -925,7 +1072,8 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.AsIs,
         format: LLMFormat.Ollama,
         flags: [LLMFlags.hasFullSystemPrompt],
-        parameters: OpenAIParameters
+        parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.Unknown
     },
     {
         id: 'hf:::Xenova/opt-350m',
@@ -933,7 +1081,8 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.WebLLM,
         format: LLMFormat.WebLLM,
         flags: [LLMFlags.hasFullSystemPrompt],
-        parameters: OpenAIParameters
+        parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.Local
     },
     {
         id: 'hf:::Xenova/tiny-random-mistral',
@@ -941,7 +1090,8 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.WebLLM,
         format: LLMFormat.WebLLM,
         flags: [LLMFlags.hasFullSystemPrompt],
-        parameters: OpenAIParameters
+        parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.Local
     },
     {
         id: 'hf:::Xenova/gpt2-large-conversational',
@@ -949,7 +1099,8 @@ export const LLMModels: LLMModel[] = [
         provider: LLMProvider.WebLLM,
         format: LLMFormat.WebLLM,
         flags: [LLMFlags.hasFullSystemPrompt],
-        parameters: OpenAIParameters
+        parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.Local
     },
     {
         id: 'custom',
@@ -958,7 +1109,8 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.Plugin,
         flags: [LLMFlags.hasFullSystemPrompt],
         recommended: true,
-        parameters: ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k']
+        parameters: ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k'],
+        tokenizer: LLMTokenizer.Unknown
     },
     {
         id: 'reverse_proxy',
@@ -967,7 +1119,8 @@ export const LLMModels: LLMModel[] = [
         format: LLMFormat.OpenAICompatible,
         flags: [LLMFlags.hasFullSystemPrompt, LLMFlags.hasStreaming],
         recommended: true,
-        parameters: ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k']
+        parameters: ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k'],
+        tokenizer: LLMTokenizer.Unknown
     }
 ]
 
@@ -979,11 +1132,16 @@ for(let model of LLMModels){
 
 export function getModelInfo(id: string): LLMModel{
 
-    const found:LLMModel = LLMModels.find(model => model.id === id)
+    const db = getDatabase()
+    const found:LLMModel = safeStructuredClone(LLMModels.find(model => model.id === id))
+    
+    if(found){
+        if(db.enableCustomFlags){
+            found.flags = db.customFlags
+        }
 
-    console.log('found', found)
-
-    if(found) return found
+        return found
+    }
 
     if(id.startsWith('hf:::')){
         const withoutPrefix = id.replace('hf:::', '')
@@ -996,7 +1154,8 @@ export function getModelInfo(id: string): LLMModel{
             provider: LLMProvider.WebLLM,
             format: LLMFormat.WebLLM,
             flags: [],
-            parameters: OpenAIParameters
+            parameters: OpenAIParameters,
+            tokenizer: LLMTokenizer.Local
         }
     }
     if(id.startsWith('horde:::')){
@@ -1010,7 +1169,8 @@ export function getModelInfo(id: string): LLMModel{
             provider: LLMProvider.Horde,
             format: LLMFormat.Horde,
             flags: [],
-            parameters: OpenAIParameters
+            parameters: OpenAIParameters,
+            tokenizer: LLMTokenizer.Unknown
         }
     }
 
@@ -1023,7 +1183,8 @@ export function getModelInfo(id: string): LLMModel{
         provider: LLMProvider.AsIs,
         format: LLMFormat.OpenAICompatible,
         flags: [],
-        parameters: OpenAIParameters
+        parameters: OpenAIParameters,
+        tokenizer: LLMTokenizer.Unknown
     }
 }
 

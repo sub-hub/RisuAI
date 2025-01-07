@@ -1,6 +1,6 @@
 import type { MultiModal, OpenAIChat, OpenAIChatFull } from "./index.svelte";
 import { getCurrentCharacter, getDatabase, setDatabase, type character } from "../storage/database.svelte";
-import { pluginProcess } from "../plugins/plugins";
+import { pluginProcess, pluginV2 } from "../plugins/plugins";
 import { language } from "../../lang";
 import { stringlizeAINChat, getStopStrings, unstringlizeAIN, unstringlizeChat } from "./stringlize";
 import { addFetchLog, fetchNative, globalFetch, isNodeServer, isTauri, textifyReadableStream } from "../globalApi.svelte";
@@ -11,7 +11,7 @@ import { risuChatParser } from "../parser.svelte";
 import { SignatureV4 } from "@smithy/signature-v4";
 import { HttpRequest } from "@smithy/protocol-http";
 import { Sha256 } from "@aws-crypto/sha256-js";
-import { supportsInlayImage } from "./files/image";
+import { supportsInlayImage } from "./files/inlays";
 import { Capacitor } from "@capacitor/core";
 import { getFreeOpenRouterModel } from "../model/openrouter";
 import { runTransformers } from "./transformers";
@@ -19,7 +19,7 @@ import {createParser} from 'eventsource-parser'
 import {Ollama} from 'ollama/dist/browser.mjs'
 import { applyChatTemplate } from "./templates/chatTemplate";
 import { OobaParams } from "./prompt";
-import { extractJSON, getOpenAIJSONSchema } from "./templates/jsonSchema";
+import { extractJSON, getGeneralJSONSchema, getOpenAIJSONSchema } from "./templates/jsonSchema";
 import { getModelInfo, LLMFlags, LLMFormat, type LLMModel } from "../model/modellist";
 
 
@@ -39,6 +39,8 @@ interface requestDataArgument{
     continue?:boolean
     chatId?:string
     noMultiGen?:boolean
+    schema?:string
+    extractJson?:string
 }
 
 interface RequestDataArgumentExtended extends requestDataArgument{
@@ -95,7 +97,9 @@ type ParameterMap = {
     [key in Parameter]?: string;
 };
 
-function applyParameters(data: { [key: string]: any }, parameters: Parameter[], rename: ParameterMap, ModelMode:ModelModeExtended): { [key: string]: any } {
+function applyParameters(data: { [key: string]: any }, parameters: Parameter[], rename: ParameterMap, ModelMode:ModelModeExtended, arg:{
+    ignoreTopKIfZero?:boolean
+} = {}): { [key: string]: any } {
     const db = getDatabase()
     if(db.seperateParametersEnabled && ModelMode !== 'model'){
         if(ModelMode === 'submodel'){
@@ -103,7 +107,46 @@ function applyParameters(data: { [key: string]: any }, parameters: Parameter[], 
         }
 
         for(const parameter of parameters){
-            let value = db.seperateParameters[ModelMode][parameter]
+            
+            let value = 0
+            if(parameter === 'top_k' && arg.ignoreTopKIfZero && db.seperateParameters[ModelMode][parameter] === 0){
+                continue
+            }
+
+            switch(parameter){
+                case 'temperature':{
+                    value = db.seperateParameters[ModelMode].temperature === -1000 ? -1000 : (db.seperateParameters[ModelMode].temperature / 100)
+                    break
+                }
+                case 'top_k':{
+                    value = db.seperateParameters[ModelMode].top_k
+                    break
+                }
+                case 'repetition_penalty':{
+                    value = db.seperateParameters[ModelMode].repetition_penalty
+                    break
+                }
+                case 'min_p':{
+                    value = db.seperateParameters[ModelMode].min_p
+                    break
+                }
+                case 'top_a':{
+                    value = db.seperateParameters[ModelMode].top_a
+                    break
+                }
+                case 'top_p':{
+                    value = db.seperateParameters[ModelMode].top_p
+                    break
+                }
+                case 'frequency_penalty':{
+                    value = db.seperateParameters[ModelMode].frequency_penalty === -1000 ? -1000 : (db.seperateParameters[ModelMode].frequency_penalty / 100)
+                    break
+                }
+                case 'presence_penalty':{
+                    value = db.seperateParameters[ModelMode].presence_penalty === -1000 ? -1000 : (db.seperateParameters[ModelMode].presence_penalty / 100)
+                    break
+                }
+            }
 
             if(value === -1000 || value === undefined){
                 continue
@@ -117,6 +160,9 @@ function applyParameters(data: { [key: string]: any }, parameters: Parameter[], 
 
     for(const parameter of parameters){
         let value = 0
+        if(parameter === 'top_k' && arg.ignoreTopKIfZero && db.top_k === 0){
+            continue
+        }
         switch(parameter){
             case 'temperature':{
                 value = db.temperature === -1000 ? -1000 : (db.temperature / 100)
@@ -165,7 +211,47 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
     const db = getDatabase()
     let trys = 0
     while(true){
+
+        if(pluginV2.replacerbeforeRequest.size > 0){
+            for(const replacer of pluginV2.replacerbeforeRequest){
+                arg.formated = await replacer(arg.formated, model)
+            }
+        }
+
         const da = await requestChatDataMain(arg, model, abortSignal)
+
+        if(da.type === 'success' && pluginV2.replacerafterRequest.size > 0){
+            for(const replacer of pluginV2.replacerafterRequest){
+                da.result = await replacer(da.result, model)
+            }
+        }
+
+        if(da.type === 'success' && db.banCharacterset?.length > 0){
+            let failed = false
+            for(const set of db.banCharacterset){
+                console.log(set)
+                const checkRegex = new RegExp(`\\p{Script=${set}}`, 'gu')
+
+                if(checkRegex.test(da.result)){
+                    trys += 1
+                    if(trys > db.requestRetrys){
+                        return {
+                            type: 'fail',
+                            result: 'Banned character found, retry limit reached'
+                        }
+                    }
+                    
+                    failed = true
+                    break
+                }
+            }
+
+            if(failed){
+                continue
+            }
+        }
+
+
         if(da.type !== 'fail' || da.noRetry){
             return da
         }
@@ -193,13 +279,14 @@ interface OpenAIImageContents {
 type OpenAIContents = OpenAITextContents|OpenAIImageContents
 
 export interface OpenAIChatExtra {
-    role: 'system'|'user'|'assistant'|'function'
+    role: 'system'|'user'|'assistant'|'function'|'developer'
     content: string|OpenAIContents[]
     memo?:string
     name?:string
     removable?:boolean
     attr?:string[]
     multimodals?:MultiModal[]
+    thoughts?:string[]
 }
 
 function reformater(formated:OpenAIChat[],modelInfo:LLMModel){
@@ -209,15 +296,20 @@ function reformater(formated:OpenAIChat[],modelInfo:LLMModel){
 
     if(!modelInfo.flags.includes(LLMFlags.hasFullSystemPrompt)){
         if(modelInfo.flags.includes(LLMFlags.hasFirstSystemPrompt)){
-            if(formated[0].role === 'system'){
-                systemPrompt = formated[0]
+            while(formated[0].role === 'system'){
+                if(systemPrompt){
+                    systemPrompt.content += '\n\n' + formated[0].content
+                }
+                else{
+                    systemPrompt = formated[0]
+                }
                 formated = formated.slice(1)
             }
         }
 
         for(let i=0;i<formated.length;i++){
             if(formated[i].role === 'system'){
-                formated[i].content = db.systemContentReplacement.replace('{{slot}}', formated[i].content)
+                formated[i].content = db.systemContentReplacement ? db.systemContentReplacement.replace('{{slot}}', formated[i].content) : `system: ${formated[i].content}`
                 formated[i].role = db.systemRoleReplacement
             }
         }
@@ -233,7 +325,23 @@ function reformater(formated:OpenAIChat[],modelInfo:LLMModel){
             }
 
             if(newFormated[newFormated.length-1].role === m.role){
+            
                 newFormated[newFormated.length-1].content += '\n' + m.content
+
+                if(m.multimodals){
+                    if(!newFormated[newFormated.length-1].multimodals){
+                        newFormated[newFormated.length-1].multimodals = []
+                    }
+                    newFormated[newFormated.length-1].multimodals.push(...m.multimodals)
+                }
+
+                if(m.thoughts){
+                    if(!newFormated[newFormated.length-1].thoughts){
+                        newFormated[newFormated.length-1].thoughts = []
+                    }
+                    newFormated[newFormated.length-1].thoughts.push(...m.thoughts)
+                }
+
                 continue
             }
             else{
@@ -276,6 +384,7 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
     targ.abortSignal = abortSignal
     targ.modelInfo = getModelInfo(targ.aiModel)
     targ.mode = model
+    targ.extractJson = arg.extractJson ?? db.extractJson
     if(targ.aiModel === 'reverse_proxy'){
         targ.modelInfo.internalID = db.customProxyRequestModel
         targ.modelInfo.format = db.customAPIFormat
@@ -371,6 +480,7 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
             delete formatedChat[i].removable
             delete formatedChat[i].attr
             delete formatedChat[i].multimodals
+            delete formatedChat[i].thoughts
         }
         if(aiModel === 'reverse_proxy' && db.reverseProxyOobaMode && formatedChat[i].role === 'system'){
             const cont = formatedChat[i].content
@@ -391,17 +501,8 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
 
     if(db.newOAIHandle){
         formatedChat = formatedChat.filter(m => {
-            return m.content !== ''
+            return m.content !== '' || (m.multimodals && m.multimodals.length > 0)
         })
-    }
-
-    if(aiModel.startsWith('gpt4o1')){
-        for(let i=0;i<formatedChat.length;i++){
-            if(formatedChat[i].role === 'system'){
-                formatedChat[i].content = `<system>${formatedChat[i].content}</system>`
-                formatedChat[i].role = 'user'
-            }
-        }
     }
 
     for(let i=0;i<arg.biasString.length;i++){
@@ -462,6 +563,15 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
         openrouterRequestModel = await getFreeOpenRouterModel()
     }
 
+    if(arg.modelInfo.flags.includes(LLMFlags.DeveloperRole)){
+        formatedChat = formatedChat.map((v) => {
+            if(v.role === 'system'){
+                v.role = 'developer'
+            }
+            return v
+        })
+    }
+
     console.log(formatedChat)
     if(arg.modelInfo.format === LLMFormat.Mistral){
         requestModel = aiModel
@@ -486,12 +596,12 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
             }
             else{
                 const prevChat = reformatedChat[reformatedChat.length-1]
-                if(prevChat.role === chat.role){
+                if(prevChat?.role === chat.role){
                     reformatedChat[reformatedChat.length-1].content += '\n' + chat.content
                     continue
                 }
                 else if(chat.role === 'system'){
-                    if(prevChat.role === 'user'){
+                    if(prevChat?.role === 'user'){
                         reformatedChat[reformatedChat.length-1].content += '\nSystem:' + chat.content
                     }
                     else{
@@ -520,10 +630,9 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
             body: applyParameters({
                 model: requestModel,
                 messages: reformatedChat,
-                top_p: db.top_p,
                 safe_prompt: false,
                 max_tokens: arg.maxTokens,
-            }, ['temperature', 'presence_penalty', 'frequency_penalty'], {}, arg.mode ),
+            }, ['temperature', 'presence_penalty', 'frequency_penalty', 'top_p'], {}, arg.mode ),
             headers: {
                 "Authorization": "Bearer " + db.mistralKey,
             },
@@ -604,7 +713,7 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
 
     })
 
-    if(aiModel.startsWith('gpt4o1')){
+    if(aiModel.startsWith('gpt4o1') || arg.modelInfo.flags.includes(LLMFlags.OAICompletionTokens)){
         body.max_completion_tokens = body.max_tokens
         delete body.max_tokens
     }
@@ -613,10 +722,10 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
         body.seed = db.generationSeed
     }
 
-    if(db.jsonSchemaEnabled){
+    if(db.jsonSchemaEnabled || arg.schema){
         body.response_format = {
             "type": "json_schema",
-            "json_schema": getOpenAIJSONSchema()
+            "json_schema": getOpenAIJSONSchema(arg.schema)
         }
     }
 
@@ -781,9 +890,9 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
                             try {
                                 const rawChunk = data.replace("data: ", "")
                                 if(rawChunk === "[DONE]"){
-                                    if(db.extractJson && db.jsonSchemaEnabled){
+                                    if(arg.extractJson && (db.jsonSchemaEnabled || arg.schema)){
                                         for(const key in readed){
-                                            const extracted = extractJSON(readed[key], db.extractJson)
+                                            const extracted = extractJSON(readed[key], arg.extractJson)
                                             JSONreaded[key] = extracted
                                         }
                                         console.log(JSONreaded)
@@ -816,9 +925,9 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
                             } catch (error) {}
                         }
                     }
-                    if(db.extractJson && db.jsonSchemaEnabled){
+                    if(arg.extractJson && (db.jsonSchemaEnabled || arg.schema)){
                         for(const key in readed){
-                            const extracted = extractJSON(readed[key], db.extractJson)
+                            const extracted = extractJSON(readed[key], arg.extractJson)
                             JSONreaded[key] = extracted
                         }
                         console.log(JSONreaded)
@@ -893,12 +1002,12 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
     if(res.ok){
         try {
             if(arg.multiGen && dat.choices){
-                if(db.extractJson && db.jsonSchemaEnabled){
+                if(arg.extractJson && (db.jsonSchemaEnabled || arg.schema)){
 
                     const c = dat.choices.map((v:{
                         message:{content:string}
                     }) => {
-                        const extracted = extractJSON(v.message.content, db.extractJson)
+                        const extracted = extractJSON(v.message.content, arg.extractJson)
                         return ["char",extracted]
                     })
 
@@ -918,10 +1027,10 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
             }
 
             if(dat?.choices[0]?.text){
-                if(db.extractJson && db.jsonSchemaEnabled){
+                if(arg.extractJson && (db.jsonSchemaEnabled || arg.schema)){
                     try {
                         const parsed = JSON.parse(dat.choices[0].text)
-                        const extracted = extractJSON(parsed, db.extractJson)
+                        const extracted = extractJSON(parsed, arg.extractJson)
                         return {
                             type: 'success',
                             result: extracted
@@ -939,10 +1048,10 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
                     result: dat.choices[0].text
                 }
             }
-            if(db.extractJson && db.jsonSchemaEnabled){
+            if(arg.extractJson && (db.jsonSchemaEnabled || arg.schema)){
                 return {
                     type: 'success',
-                    result:  extractJSON(dat.choices[0].message.content, db.extractJson)
+                    result:  extractJSON(dat.choices[0].message.content, arg.extractJson)
                 }
             }
             const msg:OpenAIChatFull = (dat.choices[0].message)
@@ -1311,34 +1420,69 @@ async function requestOoba(arg:RequestDataArgumentExtended):Promise<requestDataR
 }
 
 async function requestPlugin(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
-    const formated = arg.formated
     const db = getDatabase()
-    const maxTokens = arg.maxTokens
-    const bias = arg.biasString
-    const d = await pluginProcess({
-        bias: bias,
-        prompt_chat: formated,
-        temperature: (db.temperature / 100),
-        max_tokens: maxTokens,
-        presence_penalty: (db.PresensePenalty / 100),
-        frequency_penalty: (db.frequencyPenalty / 100)
-    })
-    if(!d){
+    try {
+        const formated = arg.formated
+        const maxTokens = arg.maxTokens
+        const bias = arg.biasString
+        const v2Function = pluginV2.providers.get(db.currentPluginProvider)
+    
+        const d = v2Function ? (await v2Function(applyParameters({
+            prompt_chat: formated,
+            mode: arg.mode,
+            bias: [],
+            max_tokens: maxTokens,
+        }, [
+            'frequency_penalty','min_p','presence_penalty','repetition_penalty','top_k','top_p','temperature'
+        ], {}, arg.mode) as any)) : await pluginProcess({
+            bias: bias,
+            prompt_chat: formated,
+            temperature: (db.temperature / 100),
+            max_tokens: maxTokens,
+            presence_penalty: (db.PresensePenalty / 100),
+            frequency_penalty: (db.frequencyPenalty / 100)
+        })
+    
+        if(!d){
+            return {
+                type: 'fail',
+                result: (language.errors.unknownModel)
+            }
+        }
+        else if(!d.success){
+            return {
+                type: 'fail',
+                result: d.content instanceof ReadableStream ? await (new Response(d.content)).text() : d.content
+            }
+        }
+        else if(d.content instanceof ReadableStream){
+    
+            let fullText = ''
+            const piper = new TransformStream<string, StreamResponseChunk>(  {
+                transform(chunk, control) {
+                    fullText += chunk
+                    control.enqueue({
+                        "0": fullText
+                    })
+                }
+            })
+    
+            return {
+                type: 'streaming',
+                result: d.content.pipeThrough(piper)
+            }
+        }
+        else{
+            return {
+                type: 'success',
+                result: d.content
+            }
+        }   
+    } catch (error) {
+        console.error(error)
         return {
             type: 'fail',
-            result: (language.errors.unknownModel)
-        }
-    }
-    else if(!d.success){
-        return {
-            type: 'fail',
-            result: d.content
-        }
-    }
-    else{
-        return {
-            type: 'success',
-            result: d.content
+            result: `Plugin Error from ${db.currentPluginProvider}: ` + JSON.stringify(error)
         }
     }
 }
@@ -1364,7 +1508,6 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
 
 
     let reformatedChat:GeminiChat[] = []
-    let pendingImage = ''
     let systemPrompt = ''
 
     if(formated[0].role === 'system'){
@@ -1374,18 +1517,52 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
 
     for(let i=0;i<formated.length;i++){
         const chat = formated[i]
-        if(chat.memo && chat.memo.startsWith('inlayImage')){
-            pendingImage = chat.content
+  
+        const prevChat = reformatedChat[reformatedChat.length-1]
+        const qRole = 
+            chat.role === 'user' ? 'USER' :
+            chat.role === 'assistant' ? 'MODEL' :
+            chat.role
+
+        if (chat.multimodals && chat.multimodals.length > 0 && chat.role === "user") {
+            let geminiParts: GeminiPart[] = [];
+            
+            geminiParts.push({
+                text: chat.content,
+            });
+            
+            for (const modal of chat.multimodals) {
+                if (
+                    (modal.type === "image" && arg.modelInfo.flags.includes(LLMFlags.hasImageInput)) ||
+                    (modal.type === "audio" && arg.modelInfo.flags.includes(LLMFlags.hasAudioInput)) ||
+                    (modal.type === "video" && arg.modelInfo.flags.includes(LLMFlags.hasVideoInput))
+                ) {
+                    const dataurl = modal.base64;
+                    const base64 = dataurl.split(",")[1];
+                    const mediaType = dataurl.split(";")[0].split(":")[1];
+        
+                    geminiParts.push({
+                        inlineData: {
+                            mimeType: mediaType,
+                            data: base64,
+                        }
+                    });
+                }
+            }
+    
+            reformatedChat.push({
+                role: "USER",
+                parts: geminiParts,
+            });
+        } else if (prevChat?.role === qRole) {
+            reformatedChat[reformatedChat.length-1].parts[
+                reformatedChat[reformatedChat.length-1].parts.length-1
+            ].text += '\n' + chat.content
             continue
         }
-        if(i === 0){
-            if(chat.role === 'user' || chat.role === 'assistant'){
-                reformatedChat.push({
-                    role: chat.role === 'user' ? 'USER' : 'MODEL',
-                    parts: [{
-                        text: chat.content
-                    }]
-                })
+        else if(chat.role === 'system'){
+            if(prevChat?.role === 'USER'){
+                reformatedChat[reformatedChat.length-1].parts[0].text += '\nsystem:' + chat.content
             }
             else{
                 reformatedChat.push({
@@ -1396,76 +1573,32 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
                 })
             }
         }
+        else if(chat.role === 'assistant' && arg.modelInfo.flags.includes(LLMFlags.geminiThinking)){
+            reformatedChat.push({
+                role: 'MODEL',
+                parts: [chat.thoughts?.length > 0 ? {
+                    text: chat.thoughts.join('\n\n')
+                } : null, {
+                    text: chat.content
+                }]
+            })
+        }
+
+        else if(chat.role === 'assistant' || chat.role === 'user'){
+            reformatedChat.push({
+                role: chat.role === 'user' ? 'USER' : 'MODEL',
+                parts: [{
+                    text: chat.content
+                }]
+            })
+        }
         else{
-            const prevChat = reformatedChat[reformatedChat.length-1]
-            const qRole = 
-                chat.role === 'user' ? 'USER' :
-                chat.role === 'assistant' ? 'MODEL' :
-                chat.role
-
-            if(prevChat.role === qRole){
-                reformatedChat[reformatedChat.length-1].parts[0].text += '\n' + chat.content
-                continue
-            }
-            else if(chat.role === 'system'){
-                if(prevChat.role === 'USER'){
-                    reformatedChat[reformatedChat.length-1].parts[0].text += '\nsystem:' + chat.content
-                }
-                else{
-                    reformatedChat.push({
-                        role: "USER",
-                        parts: [{
-                            text: chat.role + ':' + chat.content
-                        }]
-                    })
-                }
-            }
-            else if(chat.role === 'user' && pendingImage !== ''){
-                //conver image to jpeg so it can be inlined
-                const canv = document.createElement('canvas')
-                const img = new Image()
-                img.src = pendingImage  
-                await img.decode()
-                canv.width = img.width
-                canv.height = img.height
-                const ctx = canv.getContext('2d')
-                ctx.drawImage(img, 0, 0)
-                const base64 = canv.toDataURL('image/jpeg').replace(/^data:image\/jpeg;base64,/, "")
-                const mimeType = 'image/jpeg'
-                pendingImage = ''
-                canv.remove()
-                img.remove()
-
-                reformatedChat.push({
-                    role: "USER",
-                    parts: [
-                    {
-                        text: chat.content,
-                    },
-                    {
-                        inlineData: {
-                            mimeType: mimeType,
-                            data: base64
-                        }
-                    }]
-                })
-            }
-            else if(chat.role === 'assistant' || chat.role === 'user'){
-                reformatedChat.push({
-                    role: chat.role === 'user' ? 'USER' : 'MODEL',
-                    parts: [{
-                        text: chat.content
-                    }]
-                })
-            }
-            else{
-                reformatedChat.push({
-                    role: "USER",
-                    parts: [{
-                        text: chat.role + ':' + chat.content
-                    }]
-                })
-            }
+            reformatedChat.push({
+                role: "USER",
+                parts: [{
+                    text: chat.role + ':' + chat.content
+                }]
+            })
         }
     }
 
@@ -1486,16 +1619,36 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
             "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
             "threshold": "BLOCK_NONE"
         },
+        {
+            "category": "HARM_CATEGORY_CIVIC_INTEGRITY",
+            "threshold": "BLOCK_NONE"
+        }
     ]
 
+    if(arg.modelInfo.flags.includes(LLMFlags.geminiBlockOff)){
+        for(let i=0;i<uncensoredCatagory.length;i++){
+            uncensoredCatagory[i].threshold = "OFF"
+        }
+    }
+
+    let para:Parameter[] = ['temperature', 'top_p', 'top_k', 'presence_penalty', 'frequency_penalty']
+
+    para = para.filter((v) => {
+        return arg.modelInfo.parameters.includes(v)
+    })
 
     const body = {
         contents: reformatedChat,
         generation_config: applyParameters({
             "maxOutputTokens": maxTokens,
-        }, ['temperature', 'top_p'], {
-            'top_p': "topP"
-        }, arg.mode),
+        }, para, {
+            'top_p': "topP",
+            'top_k': "topK",
+            'presence_penalty': "presencePenalty",
+            'frequency_penalty': "frequencyPenalty"
+        }, arg.mode, {
+            ignoreTopKIfZero: true
+        }),
         safetySettings: uncensoredCatagory,
         systemInstruction: {
             parts: [
@@ -1578,14 +1731,107 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
         }
     }
 
-    const url = arg.customURL ?? (arg.modelInfo.format === LLMFormat.VertexAIGemini ?
-        `https://${REGION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/us-central1/publishers/google/models/${arg.modelInfo.internalID}:streamGenerateContent`
-        : `https://generativelanguage.googleapis.com/v1beta/models/${arg.modelInfo.internalID}:generateContent?key=${db.google.accessToken}`)
+    
+    if(db.jsonSchemaEnabled || arg.schema){
+        body.generation_config.response_mime_type = "application/json"
+        body.generation_config.response_schema = getGeneralJSONSchema(arg.schema, ['$schema','additionalProperties'])
+        console.log(body.generation_config.response_schema)
+    }
+
+    let url = ''
+    
+    if(arg.customURL){
+        const u = new URL(arg.customURL)
+        u.searchParams.set('key', db.proxyKey)
+        url = u.toString()
+    }
+    else if(arg.modelInfo.format === LLMFormat.VertexAIGemini){
+        url =`https://${REGION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/us-central1/publishers/google/models/${arg.modelInfo.internalID}:streamGenerateContent`
+    }
+    else if(arg.modelInfo.format === LLMFormat.GoogleCloud && arg.useStreaming){
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${arg.modelInfo.internalID}:streamGenerateContent?key=${db.google.accessToken}`
+    }
+    else{
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${arg.modelInfo.internalID}:generateContent?key=${db.google.accessToken}`
+    }
+
+
+    if(arg.modelInfo.format === LLMFormat.GoogleCloud && arg.useStreaming){
+        headers['Content-Type'] = 'application/json'
+        const f = await fetchNative(url, {
+            headers: headers,
+            body: JSON.stringify(body),
+            method: 'POST',
+            chatId: arg.chatId,
+        })
+
+        if(f.status !== 200){
+            return {
+                type: 'fail',
+                result: await textifyReadableStream(f.body)
+            }
+        }
+
+        let fullResult:string = ''
+
+        const stream = new TransformStream<Uint8Array, StreamResponseChunk>(  {
+            async transform(chunk, control) {
+                fullResult += new TextDecoder().decode(chunk)
+                try {
+                    let reformatted = fullResult
+                    if(reformatted.endsWith(',')){
+                        reformatted = fullResult.slice(0, -1) + ']'
+                    }
+                    if(!reformatted.endsWith(']')){
+                        reformatted = fullResult + ']'
+                    }
+
+                    const data = JSON.parse(reformatted)
+
+                    let rDatas:string[] = ['']
+                    for(const d of data){
+                        const parts = d.candidates[0].content?.parts
+                        for(let i=0;i<parts.length;i++){
+                            const part = parts[i]
+                            if(i > 0){
+                                rDatas.push('')
+                            }
+
+                            rDatas[rDatas.length-1] += part.text
+                        }
+                    }
+
+                    if(arg.extractJson && (db.jsonSchemaEnabled || arg.schema)){
+                        for(let i=0;i<rDatas.length;i++){
+                            const extracted = extractJSON(rDatas[i], arg.extractJson)
+                            rDatas[i] = extracted
+                        }
+                    }
+
+                    if(rDatas.length > 1){
+                        const thought = rDatas.splice(rDatas.length-2, 1)[0]
+                        rDatas[rDatas.length-1] = `<Thoughts>${thought}</Thoughts>\n\n${rDatas.join('\n\n')}`
+                    }
+                    control.enqueue({
+                        '0': rDatas[rDatas.length-1],
+                    })
+                } catch (error) {
+                    console.log(error)
+                }
+            }
+        },)
+
+        return {
+            type: 'streaming',
+            result: f.body.pipeThrough(stream)
+        }
+    }
+
     const res = await globalFetch(url, {
         headers: headers,
         body: body,
         chatId: arg.chatId,
-        abortSignal: arg.abortSignal
+        abortSignal: arg.abortSignal,
     })
 
     if(!res.ok){
@@ -1595,13 +1841,22 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
         }
     }
 
-    let fullRes = ''
-
+    let rDatas:string[] = ['']
     const processDataItem = (data:any) => {
-        if(data?.candidates?.[0]?.content?.parts?.[0]?.text){
-            fullRes += data.candidates[0].content.parts[0].text
+        const parts = data?.candidates?.[0]?.content?.parts
+        if(parts){
+         
+            for(let i=0;i<parts.length;i++){
+                const part = parts[i]
+                if(i > 0){
+                    rDatas.push('')
+                }
+
+                rDatas[rDatas.length-1] += part.text
+            }   
         }
-        else if(data?.errors){
+        
+        if(data?.errors){
             return {
                 type: 'fail',
                 result: `${JSON.stringify(data.errors)}`
@@ -1624,9 +1879,21 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
         processDataItem(res.data)
     }
 
+    if(arg.extractJson && (db.jsonSchemaEnabled || arg.schema)){
+        for(let i=0;i<rDatas.length;i++){
+            const extracted = extractJSON(rDatas[i], arg.extractJson)
+            rDatas[i] = extracted
+        }
+    }
+    
+    if(rDatas.length > 1){
+        const thought = rDatas.splice(rDatas.length-2, 1)[0]
+        rDatas[rDatas.length-1] = `<Thoughts>${thought}</Thoughts>\n\n${rDatas.join('\n\n')}`
+    }
+
     return {
         type: 'success',
-        result: fullRes
+        result: rDatas[rDatas.length-1]
     }
 }
 
@@ -2330,7 +2597,7 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
                                             break
                                         }
                                         text += "Error:" + JSON.parse(e.data).error?.message
-                                        if(db.extractJson && db.jsonSchemaEnabled){
+                                        if(arg.extractJson && (db.jsonSchemaEnabled || arg.schema)){
                                             controller.enqueue({
                                                 "0": extractJSON(text, db.jsonSchema)
                                             })
@@ -2409,7 +2676,7 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
             result: JSON.stringify(res.data)
         }
     }
-    if(db.extractJson && db.jsonSchemaEnabled){
+    if(arg.extractJson && db.jsonSchemaEnabled){
         return {
             type: 'success',
             result: extractJSON(resText, db.jsonSchema)
@@ -2533,7 +2800,7 @@ async function requestWebLLM(arg:RequestDataArgumentExtended):Promise<requestDat
         top_p: db.ooba.top_p,
         repetition_penalty: db.ooba.repetition_penalty,
         typical_p: db.ooba.typical_p,
-    })
+    } as any)
     return {
         type: 'success',
         result: unstringlizeChat(v.generated_text as string, formated, currentChar?.name ?? '')

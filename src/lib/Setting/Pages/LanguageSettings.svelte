@@ -121,7 +121,7 @@
     {/if}
 
     {#if DBState.db.translatorType === 'google'}
-        <span class="text-textcolor mt-4">Translator Input Language</span>
+        <span class="text-textcolor mt-4">{language.sourceLanguage}</span>
         <SelectInput className="mt-2 mb-4" bind:value={DBState.db.translatorInputLanguage}>
             <OptionInput value="auto">Auto</OptionInput>
             <OptionInput value="en">English</OptionInput>
@@ -158,5 +158,11 @@
                 <Help key="translateBeforeHTMLFormatting"/>
             </Check>
         </div>
+
+        <div class="flex items-center mt-4">
+            <Check bind:check={DBState.db.autoTranslateCachedOnly} name={language.autoTranslateCachedOnly}>
+                    <Help key="autoTranslateCachedOnly"/>
+                </Check>
+        </div>        
     {/if}
 {/if}

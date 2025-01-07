@@ -1,10 +1,10 @@
 import { get, writable } from "svelte/store";
-import { type character, type MessageGenerationInfo, type Chat } from "../storage/database.svelte";
+import { type character, type MessageGenerationInfo, type Chat, changeToPreset } from "../storage/database.svelte";
 import { DBState } from '../stores.svelte';
 import { CharEmotion, selectedCharID } from "../stores.svelte";
 import { ChatTokenizer, tokenize, tokenizeNum } from "../tokenizer";
 import { language } from "../../lang";
-import { alertError } from "../alert";
+import { alertError, alertToast } from "../alert";
 import { loadLoreBookV3Prompt } from "./lorebook.svelte";
 import { findCharacterbyId, getAuthorNoteDefaultText, getPersonaPrompt, getUserName, isLastCharPunctuation, trimUntilPunctuation } from "../util";
 import { requestChatData } from "./request";
@@ -18,16 +18,17 @@ import { groupOrder } from "./group";
 import { runTrigger } from "./triggers";
 import { HypaProcesser } from "./memory/hypamemory";
 import { additionalInformations } from "./embedding/addinfo";
-import { getInlayImage, supportsInlayImage } from "./files/image";
+import { getInlayAsset, supportsInlayImage } from "./files/inlays";
 import { getGenerationModelString } from "./models/modelString";
 import { connectionOpen, peerRevertChat, peerSafeCheck, peerSync } from "../sync/multiuser";
 import { runInlayScreen } from "./inlayScreen";
-import { runCharacterJS } from "../plugins/embedscript";
 import { addRerolls } from "./prereroll";
 import { runImageEmbedding } from "./transformers";
 import { hanuraiMemory } from "./memory/hanuraiMemory";
 import { hypaMemoryV2 } from "./memory/hypav2";
 import { runLuaEditTrigger } from "./lua";
+import { parseChatML } from "../parser.svelte";
+import { getModelInfo, LLMFlags } from "../model/modellist";
 
 export interface OpenAIChat{
     role: 'system'|'user'|'assistant'|'function'
@@ -37,10 +38,11 @@ export interface OpenAIChat{
     removable?:boolean
     attr?:string[]
     multimodals?: MultiModal[]
+    thoughts?: string[]
 }
 
 export interface MultiModal{
-    type:'image'|'video'
+    type:'image'|'video'|'audio'
     base64:string,
     height?:number,
     width?:number
@@ -107,6 +109,23 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
     }
     doingChat.set(true)
+
+    if(chatProcessIndex === -1 && DBState.db.presetChain){
+        const names = DBState.db.presetChain.split(',').map((v) => v.trim())
+        const randomSelect = Math.floor(Math.random() * names.length)
+        const ele = names[randomSelect]
+
+        const findId = DBState.db.botPresets.findIndex((v) => {
+            return v.name === ele
+        })
+
+        if(findId === -1){
+            alertToast(`Cannot find preset: ${ele}`)
+        }
+        else{
+            changeToPreset(findId, true)
+        }
+    }
 
     if(connectionOpen){
         chatProcessStage.set(4)
@@ -548,6 +567,11 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     await tokenizeChatArray([prompt])
                     break
                 }
+                case 'chatML':{
+                    let prompts = parseChatML(card.text)
+                    await tokenizeChatArray(prompts)
+                    break
+                }
                 case 'chat':{
                     let start = card.rangeStart
                     let end = (card.rangeEnd === 'end') ? unformated.chats.length : card.rangeEnd
@@ -664,10 +688,10 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
         let inlays:string[] = []
         if(msg.role === 'char'){
-            formatedChat = formatedChat.replace(/{{inlay::(.+?)}}/g, '')
+            formatedChat = formatedChat.replace(/{{(inlay|inlayed)::(.+?)}}/g, '')
         }
         else{
-            const inlayMatch = formatedChat.match(/{{inlay::(.+?)}}/g)
+            const inlayMatch = formatedChat.match(/{{(inlay|inlayed)::(.+?)}}/g)
             if(inlayMatch){
                 for(const inlay of inlayMatch){
                     inlays.push(inlay)
@@ -676,12 +700,13 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         }
 
         let multimodal:MultiModal[] = []
+        const modelinfo = getModelInfo(DBState.db.aiModel)
         if(inlays.length > 0){
             for(const inlay of inlays){
-                const inlayName = inlay.replace('{{inlay::', '').replace('}}', '')
-                const inlayData = await getInlayImage(inlayName)
-                if(inlayData){
-                    if(supportsInlayImage()){
+                const inlayName = inlay.replace('{{inlayed::', '').replace('{{inlay::', '').replace('}}', '')
+                const inlayData = await getInlayAsset(inlayName)
+                if(inlayData?.type === 'image'){
+                    if(modelinfo.flags.includes(LLMFlags.hasImageInput)){
                         multimodal.push({
                             type: 'image',
                             base64: inlayData.data,
@@ -692,6 +717,14 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     else{
                         const captionResult = await runImageEmbedding(inlayData.data) 
                         formatedChat += `[${captionResult[0].generated_text}]`
+                    }
+                }
+                if(inlayData?.type === 'video' || inlayData?.type === 'audio'){
+                    if(multimodal.length === 0){
+                        multimodal.push({
+                            type: inlayData.type,
+                            base64: inlayData.data
+                        })
                     }
                 }
                 formatedChat = formatedChat.replace(inlay, '')
@@ -719,19 +752,22 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     break
             }
         }
-        if(usingPromptTemplate && DBState.db.promptSettings.maxThoughtTagDepth !== -1){
-            const depth = ms.length - index
-            if(depth >= DBState.db.promptSettings.maxThoughtTagDepth){
-                formatedChat = formatedChat.replace(/<Thoughts>(.+?)<\/Thoughts>/gm, '')
+        let thoughts:string[] = []
+        const maxThoughtDepth = DBState.db.promptSettings?.maxThoughtTagDepth ?? -1
+        formatedChat = formatedChat.replace(/<Thoughts>(.+)<\/Thoughts>/gms, (match, p1) => {
+            if(maxThoughtDepth === -1 || (maxThoughtDepth - ms.length) <= index){
+                thoughts.push(p1)
             }
-        }
+            return ''
+        })
 
         const chat:OpenAIChat = {
             role: role,
             content: formatedChat,
             memo: msg.chatId,
             attr: attr,
-            multimodals: multimodal
+            multimodals: multimodal,
+            thoughts: thoughts
         }
         if(chat.multimodals.length === 0){
             delete chat.multimodals
@@ -770,9 +806,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             chats = hn.chats
             currentTokens = hn.tokens
         }
-        else if(DBState.db.hypav2){ //HypaV2 support needs to be changed like this.
+        else if(DBState.db.hypav2){
+            console.log("Current chat's hypaV2 Data: ", currentChat.hypaV2Data)
             const sp = await hypaMemoryV2(chats, currentTokens, maxContextTokens, currentChat, nowChatroom, tokenizer)
-            console.log("All chats: ", chats)
             if(sp.error){
                 console.log(sp)
                 alertError(sp.error)
@@ -782,7 +818,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             currentTokens = sp.currentTokens
             currentChat.hypaV2Data = sp.memory ?? currentChat.hypaV2Data
             DBState.db.characters[selectedChar].chats[selectedChat].hypaV2Data = currentChat.hypaV2Data
-            console.log(currentChat.hypaV2Data)
+
+            currentChat = DBState.db.characters[selectedChar].chats[selectedChat];
+            console.log("[Expected to be updated] chat's HypaV2Data: ", currentChat.hypaV2Data)
         }
         else{
             const sp = await supaMemory(chats, currentTokens, maxContextTokens, currentChat, nowChatroom, tokenizer, {
@@ -1007,6 +1045,11 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     pushPrompts([prompt])
                     break
                 }
+                case 'chatML':{
+                    let prompts = parseChatML(card.text)
+                    pushPrompts(prompts)
+                    break
+                }
                 case 'chat':{
                     let start = card.rangeStart
                     let end = (card.rangeEnd === 'end') ? unformated.chats.length : card.rangeEnd
@@ -1074,12 +1117,6 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         })
     }
 
-    formated = await runCharacterJS({
-        code: null,
-        mode: 'modifyRequestChat',
-        data: formated
-    })
-
     formated = await runLuaEditTrigger(currentChar, 'editRequest', formated)
 
     //token rechecking
@@ -1103,7 +1140,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             pointer++
         }
         formated = formated.filter((v) => {
-            return v.content !== ''
+            return v.content !== ''  || (v.multimodals && v.multimodals.length > 0)
         })
     }
 
@@ -1319,6 +1356,22 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         })
     }
 
+    if(DBState.db.notification){
+        try {
+            const permission = await Notification.requestPermission()
+            if(permission === 'granted'){
+                const noti = new Notification('RisuAI', {
+                    body: result
+                })
+                noti.onclick = () => {
+                    window.focus()
+                }
+            }
+        } catch (error) {
+            
+        }
+    }
+
     chatProcessStage.set(4)
 
     peerSync()
@@ -1367,7 +1420,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
             }
 
             if(DBState.db.emotionProcesser === 'embedding'){
-                const hypaProcesser = new HypaProcesser('MiniLM')
+                const hypaProcesser = new HypaProcesser()
                 await hypaProcesser.addText(emotionList.map((v) => 'emotion:' + v))
                 let searched = (await hypaProcesser.similaritySearchScored(result)).map((v) => {
                     v[0] = v[0].replace("emotion:",'')

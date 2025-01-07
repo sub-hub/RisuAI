@@ -2,10 +2,13 @@ import type { Tiktoken } from "@dqbd/tiktoken";
 import type { Tokenizer } from "@mlc-ai/web-tokenizers";
 import { type groupChat, type character, type Chat, getCurrentCharacter, getDatabase } from "./storage/database.svelte";
 import type { MultiModal, OpenAIChat } from "./process/index.svelte";
-import { supportsInlayImage } from "./process/files/image";
+import { supportsInlayImage } from "./process/files/inlays";
 import { risuChatParser } from "./parser.svelte";
 import { tokenizeGGUFModel } from "./process/models/local";
 import { globalFetch } from "./globalApi.svelte";
+import { getModelInfo, LLMTokenizer } from "./model/modellist";
+import { pluginV2 } from "./plugins/plugins";
+import type { GemmaTokenizer } from "@huggingface/transformers";
 
 
 export const tokenizerList = [
@@ -37,64 +40,134 @@ export async function encode(data:string):Promise<(number[]|Uint32Array|Int32Arr
             case 'llama3':
                 return await tokenizeWebTokenizers(data, 'llama')
             case 'gemma':
-                return await tokenizeWebTokenizers(data, 'gemma')
+                return await gemmaTokenize(data)
             case 'cohere':
                 return await tokenizeWebTokenizers(data, 'cohere')
             default:
                 return await tikJS(data, 'o200k_base')
         }
     }
-    if(db.aiModel.startsWith('novellist')){
+
+    const modelInfo = getModelInfo(db.aiModel)
+
+    if(db.aiModel === 'custom' && pluginV2.providerOptions.get(db.currentPluginProvider)?.tokenizer){
+        const tokenizer = pluginV2.providerOptions.get(db.currentPluginProvider)?.tokenizer
+        switch(tokenizer){
+            case 'mistral':
+                return await tokenizeWebTokenizers(data, 'mistral')
+            case 'llama':
+                return await tokenizeWebTokenizers(data, 'llama')
+            case 'novelai':
+                return await tokenizeWebTokenizers(data, 'novelai')
+            case 'claude':
+                return await tokenizeWebTokenizers(data, 'claude')
+            case 'novellist':
+                return await tokenizeWebTokenizers(data, 'novellist')
+            case 'llama3':
+                return await tokenizeWebTokenizers(data, 'llama')
+            case 'gemma':
+                return await gemmaTokenize(data)
+            case 'cohere':
+                return await tokenizeWebTokenizers(data, 'cohere')
+            case 'o200k_base':
+                return await tikJS(data, 'o200k_base')
+            case 'cl100k_base':
+                return await tikJS(data, 'cl100k_base')
+            case 'custom':
+                return await pluginV2.providerOptions.get(db.currentPluginProvider)?.tokenizerFunc?.(data) ?? [0]
+            default:
+                return await tikJS(data, 'o200k_base')
+        }
+    }
+
+    if(modelInfo.tokenizer === LLMTokenizer.NovelList){
         const nv= await tokenizeWebTokenizers(data, 'novellist')
         return nv
     }
-    if(db.aiModel.startsWith('claude')){
+    if(modelInfo.tokenizer === LLMTokenizer.Claude){
         return await tokenizeWebTokenizers(data, 'claude')
     }
-    if(db.aiModel.startsWith('novelai')){
+    if(modelInfo.tokenizer === LLMTokenizer.NovelAI){
         return await tokenizeWebTokenizers(data, 'novelai')
     }
-    if(db.aiModel.startsWith('mistral')){
+    if(modelInfo.tokenizer === LLMTokenizer.Mistral){
         return await tokenizeWebTokenizers(data, 'mistral')
     }
-    if(db.aiModel === 'mancer' ||
-        db.aiModel === 'textgen_webui' ||
-        (db.aiModel === 'reverse_proxy' && db.reverseProxyOobaMode)){
+    if(modelInfo.tokenizer === LLMTokenizer.Llama){
         return await tokenizeWebTokenizers(data, 'llama')
     }
-    if(db.aiModel.startsWith('local_')){
+    if(modelInfo.tokenizer === LLMTokenizer.Local){
         return await tokenizeGGUFModel(data)
     }
-    if(db.aiModel === 'ooba'){
-        if(db.reverseProxyOobaArgs.tokenizer === 'mixtral' || db.reverseProxyOobaArgs.tokenizer === 'mistral'){
-            return await tokenizeWebTokenizers(data, 'mistral')
-        }
-        else if(db.reverseProxyOobaArgs.tokenizer === 'llama'){
-            return await tokenizeWebTokenizers(data, 'llama')
-        }
-        else{
-            return await tokenizeWebTokenizers(data, 'llama')
-        }
-    }
-    if(db.aiModel.startsWith('gpt4o')){
+    if(modelInfo.tokenizer === LLMTokenizer.tiktokenO200Base){
         return await tikJS(data, 'o200k_base')
     }
-    if(db.aiModel.startsWith('gemini')){
-        return await tokenizeWebTokenizers(data, 'gemma')
+    if(modelInfo.tokenizer === LLMTokenizer.GoogleCloud && db.googleClaudeTokenizing){
+        return await tokenizeGoogleCloud(data)
     }
-    if(db.aiModel.startsWith('cohere')){
+    if(modelInfo.tokenizer === LLMTokenizer.Gemma || modelInfo.tokenizer === LLMTokenizer.GoogleCloud){
+        return await gemmaTokenize(data)
+    }
+    if(modelInfo.tokenizer === LLMTokenizer.Cohere){
         return await tokenizeWebTokenizers(data, 'cohere')
     }
 
     return await tikJS(data)
 }
 
-type tokenizerType = 'novellist'|'claude'|'novelai'|'llama'|'mistral'|'llama3'|'gemma'|'cohere'
+type tokenizerType = 'novellist'|'claude'|'novelai'|'llama'|'mistral'|'llama3'|'gemma'|'cohere'|'googleCloud'
 
 let tikParser:Tiktoken = null
 let tokenizersTokenizer:Tokenizer = null
 let tokenizersType:tokenizerType = null
 let lastTikModel = 'cl100k_base'
+
+let googleCloudTokenizedCache = new Map<string, number>()
+
+async function tokenizeGoogleCloud(text:string) {
+    const db = getDatabase()
+    const model = getModelInfo(db.aiModel)
+
+    if(googleCloudTokenizedCache.has(text + model.internalID)){
+        const count = googleCloudTokenizedCache.get(text)
+        return new Uint32Array(count)
+    }
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model.internalID}:countTokens?key=${db.google?.accessToken}`, {
+        method: 'POST',
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            contents: [{
+                parts:[{
+                    text: text
+                }]
+            }]
+        }),
+    })
+
+    if(res.status !== 200){
+        return await tokenizeWebTokenizers(text, 'gemma')
+    }
+
+    const json = await res.json()
+    googleCloudTokenizedCache.set(text + model.internalID, json.totalTokens as number)
+    const count = json.totalTokens as number
+
+    return new Uint32Array(count)
+}
+
+let gemmaTokenizer:GemmaTokenizer = null
+async function gemmaTokenize(text:string) {
+    if(!gemmaTokenizer){
+        const {GemmaTokenizer} = await import('@huggingface/transformers')
+        gemmaTokenizer = new GemmaTokenizer(
+            await (await fetch("/token/llama/llama3.json")
+        ).json(), {})
+    }
+    return gemmaTokenizer.encode(text)
+}
 
 async function tikJS(text:string, model='cl100k_base') {
     if(!tikParser || lastTikModel !== model){
@@ -222,15 +295,15 @@ export async function tokenizeAccurate(data:string, consistantChar?:boolean) {
 
 export class ChatTokenizer {
 
-    private chatAdditonalTokens:number
+    private chatAdditionalTokens:number
     private useName:'name'|'noName'
 
-    constructor(chatAdditonalTokens:number, useName:'name'|'noName'){
-        this.chatAdditonalTokens = chatAdditonalTokens
+    constructor(chatAdditionalTokens:number, useName:'name'|'noName'){
+        this.chatAdditionalTokens = chatAdditionalTokens
         this.useName = useName
     }
     async tokenizeChat(data:OpenAIChat) {
-        let encoded = (await encode(data.content)).length + this.chatAdditonalTokens
+        let encoded = (await encode(data.content)).length + this.chatAdditionalTokens
         if(data.name && this.useName ==='name'){
             encoded += (await encode(data.name)).length + 1
         }
@@ -239,19 +312,31 @@ export class ChatTokenizer {
                 encoded += await this.tokenizeMultiModal(multimodal)
             }
         }
+        if(data.thoughts && data.thoughts.length > 0){
+            for(const thought of data.thoughts){
+                encoded += (await encode(thought)).length + 1
+            }
+        }
+        return encoded
+    }
+    async tokenizeChats(data:OpenAIChat[]){
+        let encoded = 0
+        for(const chat of data){
+            encoded += await this.tokenizeChat(chat)
+        }
         return encoded
     }
 
     async tokenizeMultiModal(data:MultiModal){
         const db = getDatabase()
         if(!supportsInlayImage()){
-            return this.chatAdditonalTokens
+            return this.chatAdditionalTokens
         }
         if(db.gptVisionQuality === 'low'){
             return 87
         }
 
-        let encoded = this.chatAdditonalTokens
+        let encoded = this.chatAdditionalTokens
         let height = data.height ?? 0
         let width = data.width ?? 0
 

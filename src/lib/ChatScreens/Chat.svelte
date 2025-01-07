@@ -2,12 +2,12 @@
     import { ArrowLeft, Sparkles, ArrowRight, PencilIcon, LanguagesIcon, RefreshCcwIcon, TrashIcon, CopyIcon, Volume2Icon, BotIcon, ArrowLeftRightIcon, UserIcon } from "lucide-svelte";
     import { type CbsConditions, ParseMarkdown, postTranslationParse, type simpleCharacterArgument } from "../../ts/parser.svelte";
     import AutoresizeArea from "../UI/GUI/TextAreaResizable.svelte";
-    import { alertConfirm, alertError, alertNormal, alertRequestData, alertWait } from "../../ts/alert";
+    import { alertClear, alertConfirm, alertError, alertNormal, alertRequestData, alertWait } from "../../ts/alert";
     import { language } from "../../lang";
     import { type MessageGenerationInfo } from "../../ts/storage/database.svelte";
     import { alertStore, DBState } from 'src/ts/stores.svelte';
     import { HideIconStore, ReloadGUIPointer, selIdState } from "../../ts/stores.svelte";
-    import { translateHTML } from "../../ts/translator/translator";
+    import { translateHTML, getLLMCache } from "../../ts/translator/translator";
     import { risuChatParser } from "src/ts/process/scripts";
     import { type Unsubscriber } from "svelte/store";
     import { get, isEqual, startsWith } from "lodash";
@@ -57,7 +57,7 @@
     }: Props = $props();
 
     let msgDisplay = $state('')
-    let translated = $state(DBState.db.autoTranslate)
+    let translated = $state(false)
     let role = $derived(DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx]?.role)
     async function rm(e:MouseEvent, rec?:boolean){
         if(e.shiftKey){
@@ -140,7 +140,16 @@
                 translateText = false
                 try {
                     if(DBState.db.autoTranslate){
-                        translateText = true
+                        if(DBState.db.autoTranslateCachedOnly && DBState.db.translatorType === 'llm'){
+                            const cache = DBState.db.translateBeforeHTMLFormatting
+                            ? await getLLMCache(data)
+                            : await getLLMCache(await ParseMarkdown(data, charArg, 'pretranslate', chatID, getCbsCondition()))
+                  
+                            translateText = cache !== null
+                        }
+                        else{
+                            translateText = true
+                        }
                     }
 
                     setTimeout(() => {
@@ -422,7 +431,10 @@
                         return
                     }
                     catch (e) {
-                        alertError(`Error, please try again: ${e.message}`)
+                        alertClear()
+                        window.navigator.clipboard.writeText(msgDisplay).then(() => {
+                            setStatusMessage(language.copied)
+                        })
                     }
                 }
                 window.navigator.clipboard.writeText(msgDisplay).then(() => {
@@ -453,6 +465,7 @@
                 }}>
                     <PencilIcon size={20}/>
                 </button>
+                <!-- 이 버튼이 수정 버튼. edit() 함수를 주목할 것-->
                 <button class="ml-2 hover:text-blue-500 transition-colors button-icon-remove" onclick={(e) => rm(e, false)} use:longpress={(e) => rm(e, true)}>
                     <TrashIcon size={20}/>
                 </button>

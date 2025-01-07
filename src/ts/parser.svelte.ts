@@ -9,11 +9,12 @@ import css, { type CssAtRuleAST } from '@adobe/css-tools'
 import { SizeStore, selectedCharID } from './stores.svelte';
 import { calcString } from './process/infunctions';
 import { findCharacterbyId, getPersonaPrompt, getUserIcon, getUserName, parseKeyValue, sfc32, sleep, uuidtoNumber } from './util';
-import { getInlayImage } from './process/files/image';
+import { getInlayAsset } from './process/files/inlays';
 import { getModuleAssets, getModuleLorebooks } from './process/modules';
 import type { OpenAIChat } from './process/index.svelte';
 import hljs from 'highlight.js/lib/core'
 import 'highlight.js/styles/atom-one-dark.min.css'
+import { language } from 'src/lang';
 
 const markdownItOptions = {
     html: true,
@@ -117,18 +118,30 @@ async function renderHighlightableMarkdown(data:string) {
             //import language if not already loaded
             //we do not refactor this to a function because we want to keep vite to only import the languages that are needed
             let languageModule:any = null
+            let shotLang = ''
             switch(lang){
                 case 'js':
                 case 'javascript':{
                     lang = 'javascript'
+                    shotLang = 'js'
                     if(!hljs.getLanguage('javascript')){
                         languageModule = await import('highlight.js/lib/languages/javascript')
+                    }
+                    break
+                }
+                case 'txt':
+                case 'vtt':{
+                    shotLang = lang
+                    lang = 'plaintext'
+                    if(!hljs.getLanguage('plaintext')){
+                        languageModule = await import('highlight.js/lib/languages/plaintext')
                     }
                     break
                 }
                 case 'py':
                 case 'python':{
                     lang = 'python'
+                    shotLang = 'py'
                     if(!hljs.getLanguage('python')){
                         languageModule = await import('highlight.js/lib/languages/python')
                     }
@@ -136,6 +149,7 @@ async function renderHighlightableMarkdown(data:string) {
                 }
                 case 'css':{
                     lang = 'css'
+                    shotLang = 'css'
                     if(!hljs.getLanguage('css')){
                         languageModule = await import('highlight.js/lib/languages/css')
                     }
@@ -144,6 +158,7 @@ async function renderHighlightableMarkdown(data:string) {
                 case 'xml':
                 case 'html':{
                     lang = 'xml'
+                    shotLang = 'xml'
                     if(!hljs.getLanguage('xml')){
                         languageModule = await import('highlight.js/lib/languages/xml')
                     }
@@ -151,6 +166,7 @@ async function renderHighlightableMarkdown(data:string) {
                 }
                 case 'lua':{
                     lang = 'lua'
+                    shotLang = 'lua'
                     if(!hljs.getLanguage('lua')){
                         languageModule = await import('highlight.js/lib/languages/lua')
                     }
@@ -158,6 +174,7 @@ async function renderHighlightableMarkdown(data:string) {
                 }
                 case 'dart':{
                     lang = 'dart'
+                    shotLang = 'dart'
                     if(!hljs.getLanguage('dart')){
                         languageModule = await import('highlight.js/lib/languages/dart')
                     }
@@ -165,6 +182,7 @@ async function renderHighlightableMarkdown(data:string) {
                 }
                 case 'java':{
                     lang = 'java'
+                    shotLang = 'java'
                     if(!hljs.getLanguage('java')){
                         languageModule = await import('highlight.js/lib/languages/java')
                     }
@@ -172,6 +190,7 @@ async function renderHighlightableMarkdown(data:string) {
                 }
                 case 'rust':{
                     lang = 'rust'
+                    shotLang = 'rs'
                     if(!hljs.getLanguage('rust')){
                         languageModule = await import('highlight.js/lib/languages/rust')
                     }
@@ -180,6 +199,7 @@ async function renderHighlightableMarkdown(data:string) {
                 case 'c':
                 case 'cpp':{
                     lang = 'cpp'
+                    shotLang = 'cpp'
                     if(!hljs.getLanguage('cpp')){
                         languageModule = await import('highlight.js/lib/languages/cpp')
                     }
@@ -188,6 +208,7 @@ async function renderHighlightableMarkdown(data:string) {
                 case 'csharp':
                 case 'cs':{
                     lang = 'csharp'
+                    shotLang = 'cs'
                     if(!hljs.getLanguage('csharp')){
                         languageModule = await import('highlight.js/lib/languages/csharp')
                     }
@@ -196,6 +217,7 @@ async function renderHighlightableMarkdown(data:string) {
                 case 'ts':
                 case 'typescript':{
                     lang = 'typescript'
+                    shotLang = 'ts'
                     if(!hljs.getLanguage('typescript')){
                         languageModule = await import('highlight.js/lib/languages/typescript')
                     }
@@ -203,6 +225,7 @@ async function renderHighlightableMarkdown(data:string) {
                 }
                 case 'json':{
                     lang = 'json'
+                    shotLang = 'json'
                     if(!hljs.getLanguage('json')){
                         languageModule = await import('highlight.js/lib/languages/json')
                     }
@@ -210,6 +233,7 @@ async function renderHighlightableMarkdown(data:string) {
                 }
                 case 'yaml':{
                     lang = 'yaml'
+                    shotLang = 'yml'
                     if(!hljs.getLanguage('yaml')){
                         languageModule = await import('highlight.js/lib/languages/yaml')
                     }
@@ -217,6 +241,7 @@ async function renderHighlightableMarkdown(data:string) {
                 }
                 case 'shell':{
                     lang = 'shell'
+                    shotLang = 'sh'
                     if(!hljs.getLanguage('shell')){
                         languageModule = await import('highlight.js/lib/languages/shell')
                     }
@@ -224,6 +249,7 @@ async function renderHighlightableMarkdown(data:string) {
                 }
                 case 'bash':{
                     lang = 'bash'
+                    shotLang = 'sh'
                     if(!hljs.getLanguage('bash')){
                         languageModule = await import('highlight.js/lib/languages/bash')
                     }
@@ -231,6 +257,7 @@ async function renderHighlightableMarkdown(data:string) {
                 }
                 default:{
                     lang = 'none'
+                    shotLang = 'none'
                 }
             }
             if(languageModule){
@@ -244,7 +271,9 @@ async function renderHighlightableMarkdown(data:string) {
                     language: lang,
                     ignoreIllegals: true
                 }).value
-                rendered = rendered.replace(placeholder, `<pre class="hljs"><code>${highlighted}</code></pre>`)   
+                rendered = rendered.replace(placeholder, `<pre class="hljs" x-hl-lang="${shotLang}" x-hl-text="${
+                    Buffer.from(code).toString('hex')
+                }"><code>${highlighted}</code></pre>`)   
             }
         } catch (error) {
             
@@ -321,9 +350,17 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
                 }
             }
         }
-        const path = assetPaths[name]
+        let path = assetPaths[name]
         if(!path){
-            return ''
+            if(DBState.db.legacyMediaFindings){
+                return ''
+            }
+
+            path = getClosestMatch(name, assetPaths)
+
+            if(!path){
+                return ''
+            }
         }
         switch(type){
             case 'raw':
@@ -369,69 +406,84 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
     return data
 }
 
-/**
- * Removes empty additional assets and emotion images from the given data string.
- *
- * @param data - The input data string that may contain references to additional assets and emotion images.
- * @param char - The character object containing additional assets and emotion images.
- * @returns The modified data string with empty additional assets and emotion images removed.
- */
-export async function excludeEmptyAdditionalAssets(data: string, char: simpleCharacterArgument | character): Promise<string> {
-    if (char.additionalAssets || char.emotionImages) {
-        // asset and emo import code is same as in parseAdditionalAssets
-        let assetPaths: {
-            [key: string]: {
-                path: string;
-                ext?: string;
-            };
-        } = {};
-        let emoPaths: {
-            [key: string]: {
-                path: string;
-            };
-        } = {};
-
-        if (char.additionalAssets) {
-            for (const asset of char.additionalAssets) {
-                const assetPath = await getFileSrc(asset[1]);
-                assetPaths[asset[0].toLocaleLowerCase()] = {
-                    path: assetPath,
-                    ext: asset[2],
-                };
-            }
-        }
-        if (char.emotionImages) {
-            for (const emo of char.emotionImages) {
-                const emoPath = await getFileSrc(emo[1]);
-                emoPaths[emo[0].toLocaleLowerCase()] = {
-                    path: emoPath,
-                };
-            }
-        }
-
-        data = data.replaceAll(
-            assetRegex,
-            (full: string, type: string, name: string) => {
-                name = name.toLocaleLowerCase();
-                const assetPath = assetPaths[name]?.path;
-                const emoPath = emoPaths[name]?.path;
-                const isExistAsset = Boolean(assetPath || emoPath);
-                return isExistAsset ? full : "";
-            }
-        );
+function getClosestMatch(name:string, assetPaths:{[key:string]:{path:string, ext?:string}}){
+    
+    if(Object.keys(assetPaths).length === 0){
+        return null
     }
-    return data;
+
+    //Levenshtein distance, new with 1d array
+    const dest = (a:string, b:string) => {
+        const h = a.length + 1
+        const w = b.length + 1
+        let d = new Int16Array(h * w)
+        for(let i=0;i<h;i++){
+            d[i * w] = i
+        }
+        for(let i=0;i<w;i++){
+            d[i] = i
+        }
+        for(let i=1; i<h; i++){
+            for(let j=1;j<w;j++){
+                d[i * w + j] = Math.min(
+                    d[(i-1) * w + j-1] + (a.charAt(i-1)===b.charAt(j-1) ? 0 : 1),
+                    d[(i-1) * w + j]+1, d[i * w + j-1]+1
+                )
+            }
+        }
+        return d[h * w - 1]
+
+    }
+
+    function trimmer(str:string){
+        const ext = ['webp', 'png', 'jpg', 'jpeg', 'gif', 'mp4', 'webm', 'avi', 'm4p', 'm4v', 'mp3', 'wav', 'ogg']
+        for(const e of ext){
+            if(str.endsWith('.' + e)){
+                str = str.substring(0, str.length - e.length - 1)
+            }
+        }
+
+
+        return str.trim().replace(/[_ -.]/g, '')
+    }
+
+    let closest = ''
+    let closestDist = 999999
+    const trimmedName = trimmer(name)
+    for(const key in assetPaths){
+        const dist = dest(trimmedName, trimmer(key))
+        if(dist < closestDist){
+            closest = key
+            closestDist = dist
+        }
+    }
+    if(closestDist > DBState.db.assetMaxDifference){
+        return null
+    }
+    return assetPaths[closest]
 }
 
-async function parseInlayImages(data:string){
-    const inlayMatch = data.match(/{{inlay::(.+?)}}/g)
+async function parseInlayAssets(data:string){
+    const inlayMatch = data.match(/{{(inlay|inlayed)::(.+?)}}/g)
     if(inlayMatch){
         for(const inlay of inlayMatch){
-            const id = inlay.substring(9, inlay.length - 2)
-            const img = await getInlayImage(id)
-            if(img){
-                data = data.replace(inlay, `<img src="${img.data}"/>`)
+            const inlayType = inlay.startsWith('{{inlayed') ? 'inlayed' : 'inlay'
+            const id = inlay.substring(inlay.indexOf('::') + 2, inlay.length - 2)
+            const asset = await getInlayAsset(id)
+            let prefix = inlayType === 'inlayed' ? `<div class="risu-inlay-image">` : ''
+            let postfix = inlayType === 'inlayed' ? `</div>\n\n` : ''
+            switch(asset?.type){
+                case 'image':
+                    data = data.replace(inlay, `${prefix}<img src="${asset.data}"/>${postfix}`)
+                    break
+                case 'video':
+                    data = data.replace(inlay, `${prefix}<video controls><source src="${asset.data}" type="video/mp4"></video>${postfix}`)
+                    break
+                case 'audio':
+                    data = data.replace(inlay, `${prefix}<audio controls><source src="${asset.data}" type="audio/mpeg"></audio>${postfix}`)
+                    break
             }
+            
         }
     }
     return data
@@ -447,6 +499,11 @@ export interface simpleCharacterArgument{
     triggerscript?: triggerscript[]
 }
 
+function parseThoughts(data:string){
+    return data.replace(/<Thoughts>(.+)<\/Thoughts>/gms, (full, txt) => {
+        return `<details><summary>${language.cot}</summary>${txt}</details>`
+    })
+}
 
 export async function ParseMarkdown(
     data:string,
@@ -458,25 +515,31 @@ export async function ParseMarkdown(
     let firstParsed = ''
     const additionalAssetMode = (mode === 'back') ? 'back' : 'normal'
     let char = (typeof(charArg) === 'string') ? (findCharacterbyId(charArg)) : (charArg)
+
     if(char && char.type !== 'group'){
         data = await parseAdditionalAssets(data, char, additionalAssetMode, 'pre')
         firstParsed = data
     }
+
     if(char){
         data = (await processScriptFull(char, data, 'editdisplay', chatID, cbsConditions)).data
     }
+
     if(firstParsed !== data && char && char.type !== 'group'){
         data = await parseAdditionalAssets(data, char, additionalAssetMode, 'post')
     }
-    data = await parseInlayImages(data)
+
+    data = await parseInlayAssets(data ?? '')
+
+    data = parseThoughts(data)
 
     data = encodeStyle(data)
     if(mode === 'normal'){
         data = await renderHighlightableMarkdown(data)
     }
     return decodeStyle(DOMPurify.sanitize(data, {
-        ADD_TAGS: ["iframe", "style", "risu-style", "x-em"],
-        ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling", "risu-btn", 'risu-trigger', 'risu-mark'],
+        ADD_TAGS: ["iframe", "style", "risu-style", "x-em",],
+        ADD_ATTR: ["allow", "allowfullscreen", "frameborder", "scrolling", "risu-btn", 'risu-trigger', 'risu-mark', 'x-hl-lang', 'x-hl-text'],
     }))
 }
 
@@ -777,7 +840,7 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                 if(achara.type === 'group'){
                     return ""
                 }
-                return achara.personality
+                return risuChatParser(achara.personality, matcherArg)
             }
             case 'description':
             case 'char_desc':{
@@ -786,7 +849,7 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                 if(achara.type === 'group'){
                     return ""
                 }
-                return achara.desc
+                return risuChatParser(achara.desc, matcherArg)
             }
             case 'scenario':{
                 const argChara = chara
@@ -794,7 +857,7 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                 if(achara.type === 'group'){
                     return ""
                 }
-                return achara.scenario
+                return risuChatParser(achara.scenario, matcherArg)
             }
             case 'example_dialogue':
             case 'example_message':{
@@ -803,15 +866,15 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                 if(achara.type === 'group'){
                     return ""
                 }
-                return achara.exampleMessage
+                return risuChatParser(achara.exampleMessage, matcherArg)
             }
             case 'persona':
             case 'user_persona':{
-                return getPersonaPrompt()
+                return risuChatParser(getPersonaPrompt(), matcherArg)
             }
             case 'main_prompt':
             case 'system_prompt':{
-                return db.mainPrompt
+                return risuChatParser(db.mainPrompt, matcherArg)
             }
             case 'lorebook':
             case 'world_info':{
@@ -822,49 +885,56 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                 const characterLore = (achara.type === 'group') ? [] : (achara.globalLore ?? [])
                 const chatLore = chat.localLore ?? []
                 const fullLore = characterLore.concat(chatLore.concat(getModuleLorebooks()))
-                return fullLore.map((f) => {
-                    return JSON.stringify(f)
-                }).join("§\n")
+                return makeArray(fullLore.map((v) => {
+                    return JSON.stringify(v)
+                }))
             }
             case 'history':
             case 'messages':{
                 const selchar = db.characters[get(selectedCharID)]
                 const chat = selchar.chats[selchar.chatPage]
-                return chat.message.map((f) => {
-                    return f.role + ': ' + f.data
-                }).join("§\n")
+                return makeArray([{
+                    role: 'char',
+                    data: chat.fmIndex === -1 ? selchar.firstMessage : selchar.alternateGreetings[chat.fmIndex]
+                }].concat(chat.message).map((v) => {
+                    v = safeStructuredClone(v)
+                    v.data = risuChatParser(v.data, matcherArg)
+                    return JSON.stringify(v)
+                }))
             }
 
             case 'user_history':
             case 'user_messages':{
                 const selchar = db.characters[get(selectedCharID)]
                 const chat = selchar.chats[selchar.chatPage]
-                return chat.message.map((f) => {
-                    if(f.role === 'user'){
-                        return f.data
-                    }
-                    return ''
-                }).filter((f) => {
-                    return f !== ''
-                }).join("§\n")
+                return makeArray(chat.message.filter((v) => {
+                    return v.role === 'user'
+                }).map((v) => {
+                    v = safeStructuredClone(v)
+                    v.data = risuChatParser(v.data, matcherArg)
+                    return JSON.stringify(v)
+                }))
             }
             case 'char_history':
             case 'char_messages':{
                 const selchar = db.characters[get(selectedCharID)]
                 const chat = selchar.chats[selchar.chatPage]
-                return chat.message.map((f) => {
-                    if(f.role === 'char'){
-                        return f.data
-                    }
-                    return ''
-                }).filter((f) => {
-                    return f !== ''
-                }).join("§\n")
+                return makeArray(chat.message.filter((v) => {
+                    return v.role === 'char'
+                }).map((v) => {
+                    v = safeStructuredClone(v)
+                    v.data = risuChatParser(v.data, matcherArg)
+                    return JSON.stringify(v)
+                }))
+            }
+            case 'jb':
+            case 'jailbreak':{
+                return risuChatParser(db.jailbreak, matcherArg)
             }
             case 'ujb':
             case 'global_note':
             case 'system_note':{
-                return db.globalNote
+                return risuChatParser(db.globalNote, matcherArg)
             }
             case 'chat_index':{
                 return chatID.toString() 
@@ -1095,9 +1165,9 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                 if(!selchar || selchar.type === 'group'){
                     return ''
                 }
-                return selchar.additionalAssets?.map((f) => {
+                return makeArray(selchar.additionalAssets?.map((f) => {
                     return f[0]
-                })?.join('§') ?? ''
+                }))
             }
             case 'prefill_supported':{
                 return db.aiModel.startsWith('claude') ? '1' : '0'
@@ -1343,7 +1413,9 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                 }
                 case 'arraypush':
                 case 'array_push':{
-                    return arra[1] + '§' + arra[2]
+                    const arr = parseArray(arra[1])
+                    arr.push(arra[2])
+                    return makeArray(arr)
                 }
                 case 'arraysplice':
                 case 'array_splice':{
@@ -1408,14 +1480,13 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                     const start = arr.length > 1 ? Number(arr[0]) : 0
                     const end = arr.length > 1 ? Number(arr[1]) : Number(arr[0])
                     const step = arr.length > 2 ? Number(arr[2]) : 1
-                    let out = ''
+                    let out:string[] = []
+
                     for(let i=start;i<end;i+=step){
-                        out += i.toString()
-                        if(i + step < end){
-                            out += '§'
-                        }
+                        out.push(i.toString())
                     }
-                    return out
+                    
+                    return makeArray(out)
                 }
                 case 'date':
                 case 'time':
@@ -1784,7 +1855,11 @@ function blockStartMatcher(p1:string,matcherArg:matcherArg):{type:blockMatch,typ
         return {type:'pure-display'}
     }
     if(p1.startsWith('#each')){
-        return {type:'each',type2:p1.substring(5).trim()}
+        let t2 = p1.substring(5).trim()
+        if(t2.startsWith('as ')){
+            t2 = t2.substring(3).trim()
+        }
+        return {type:'each',type2:t2}
     }
     if(p1.startsWith('#func')){
         const statement = p1.split(' ')
@@ -1805,16 +1880,19 @@ function trimLines(p1:string){
 }
 
 function blockEndMatcher(p1:string,type:{type:blockMatch,type2?:string},matcherArg:matcherArg):string{
+    const p1Trimed = p1.trim() 
     switch(type.type){
         case 'pure':
-        case 'parse-pure':
         case 'pure-display':
         case 'function':{
-            return p1
+            return p1Trimed
         }
         case 'parse':
         case 'each':{
-            return trimLines(p1)
+            return trimLines(p1Trimed)
+        }
+        case 'parse-pure':{
+            return p1
         }
         default:{
             return ''
@@ -1888,6 +1966,12 @@ export function risuChatParser(da:string, arg:{
         arg:string[]
     }> = arg.functions ?? (new Map())
 
+    arg.callStack = (arg.callStack ?? 0) + 1
+
+    if(arg.callStack > 20){
+        return 'ERROR: Call stack limit reached'
+    }
+
     const matcherObj = {
         chatID: chatID,
         chara: chara,
@@ -1899,9 +1983,11 @@ export function risuChatParser(da:string, arg:{
         role: arg.role,
         runVar: arg.runVar ?? false,
         consistantChar: arg.consistantChar ?? false,
-        cbsConditions: arg.cbsConditions ?? {}
+        cbsConditions: arg.cbsConditions ?? {},
+        callStack: arg.callStack,
     }
 
+    da = da.replace(/\<(user|char|bot)\>/gi, '{{$1}}')
 
     const isPureMode = () => {
         return pureModeNest.size > 0
@@ -1922,15 +2008,6 @@ export function risuChatParser(da:string, arg:{
                 pointer++
                 nested.unshift('')
                 stackType[nested.length] = 1
-                break
-            }
-            case '<':{
-                if(stackType[nested.length] === 1){
-                    nested[0] += da[pointer]
-                    break
-                }
-                nested.unshift('')
-                stackType[nested.length] = 2
                 break
             }
             case '#':{
@@ -1990,7 +2067,7 @@ export function risuChatParser(da:string, arg:{
                         }
                         blockNestType.delete(nested.length)
                         const dat2 = nested.shift()
-                        const matchResult = blockEndMatcher(dat2.trim(), blockType, matcherObj)
+                        const matchResult = blockEndMatcher(dat2, blockType, matcherObj)
                         if(blockType.type === 'each'){
                             const subind = blockType.type2.lastIndexOf(' ')
                             const sub = blockType.type2.substring(subind + 1)
@@ -2028,7 +2105,7 @@ export function risuChatParser(da:string, arg:{
                     }
                 }
                 if(dat.startsWith('call::')){
-                    if(arg.callStack && arg.callStack > 10){
+                    if(arg.callStack && arg.callStack > 20){
                         nested[0] += `ERROR: Call stack limit reached`
                         break
                     }
@@ -2042,7 +2119,6 @@ export function risuChatParser(da:string, arg:{
                             data = data.replaceAll(`{{arg::${i}}}`, argData[i])
                         }
                         arg.functions = functions
-                        arg.callStack = (arg.callStack ?? 0) + 1
                         nested[0] += risuChatParser(data, arg)
                         break
                     }
@@ -2059,79 +2135,6 @@ export function risuChatParser(da:string, arg:{
                     tempVar = mc.var
                     if(tempVar['__force_return__']){
                         return tempVar['__return__'] ?? 'null'
-                    }
-                }
-                break
-            }
-            case '>':{
-                if(stackType[nested.length] === 1){
-                    nested[0] += da[pointer]
-                    break
-                }
-                if(nested.length === 1 || stackType[nested.length] !== 2){
-                    break
-                }
-                const dat = nested.shift()
-                if(isPureMode() && pureModeType() !== 'pureSyntax' && pureModeType() !== ''){
-                    nested[0] += `<${dat}>`
-                    break
-                }
-                switch(dat){
-                    case 'Comment':{
-                        if(arg.runVar){
-                            break
-                        }
-                        if(!commentMode){
-                            thinkingMode = false
-                            commentMode = true
-                            commentLatest = nested.map((f) => f)
-                            if(commentLatest[0].endsWith('\n')){
-                                commentLatest[0] = commentLatest[0].substring(0, commentLatest[0].length - 1)
-                            }
-                            commentV = new Uint8Array(stackType)
-                        }
-                        break
-                    }
-                    case '/Comment':{
-                        if(commentMode){
-                            nested = commentLatest
-                            stackType = commentV
-                            commentMode = false
-                        }
-                        break
-                    }
-                    case 'Thoughts':{
-                        if(!visualize){
-                            nested[0] += `<${dat}>`
-                            break
-                        }
-                        if(!commentMode){
-                            thinkingMode = true
-                            commentMode = true
-                            commentLatest = nested.map((f) => f)
-                            if(commentLatest[0].endsWith('\n')){
-                                commentLatest[0] = commentLatest[0].substring(0, commentLatest[0].length - 1)
-                            }
-                            commentV = new Uint8Array(stackType)
-                        }
-                        break
-                    }
-                    case '/Thoughts':{
-                        if(!visualize){
-                            nested[0] += `<${dat}>`
-                            break
-                        }
-                        if(commentMode){
-                            nested = commentLatest
-                            stackType = commentV
-                            commentMode = false
-                        }
-                        break
-                    }
-                    default:{
-                        const mc = isPureMode() ? null : smMatcher(dat, matcherObj)
-                        nested[0] += mc ?? `<${dat}>`
-                        break
                     }
                 }
                 break
@@ -2338,9 +2341,17 @@ export function parseChatML(data:string):OpenAIChat[]|null{
             v = v.substring(0, v.length - ender.length)
         }
 
+
+        let thoughts:string[] = []
+        v = v.replace(/<Thoughts>(.+)<\/Thoughts>/gms, (match, p1) => {
+            thoughts.push(p1)
+            return ''
+        })
+
         return {
             role: role,
-            content: v
+            content: risuChatParser(v),
+            thoughts: thoughts
         }
     })
 }

@@ -5,14 +5,14 @@ import type { RisuPlugin } from '../plugins/plugins';
 import type {triggerscript as triggerscriptMain} from '../process/triggers';
 import { downloadFile, saveAsset as saveImageGlobal } from '../globalApi.svelte';
 import { defaultAutoSuggestPrompt, defaultJailbreak, defaultMainPrompt } from './defaultPrompts';
-import { alertNormal, alertSelect } from '../alert';
+import { alertError, alertNormal, alertSelect } from '../alert';
 import type { NAISettings } from '../process/models/nai';
 import { prebuiltNAIpresets, prebuiltPresets } from '../process/templates/templates';
 import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
-export let appVer = "140.0.2"
+export let appVer = "146.1.0"
 export let webAppSubVer = ''
 
 
@@ -229,6 +229,9 @@ export function setDatabase(data:Database){
     if(checkNullish(data.supaMemoryKey)){
         data.supaMemoryKey = ""
     }
+    if(checkNullish(data.hypaMemoryKey)){
+        data.hypaMemoryKey = ""
+    }
     if(checkNullish(data.supaModelType)){
         data.supaModelType = "none"
     }
@@ -353,6 +356,7 @@ export function setDatabase(data:Database){
     data.huggingfaceKey ??= ''
     data.fishSpeechKey ??= ''
     data.statistics ??= {}
+    data.presetRegex ??= []
     data.reverseProxyOobaArgs ??= {
         mode: 'instruct'
     }
@@ -454,20 +458,24 @@ export function setDatabase(data:Database){
     data.vertexClientEmail ??= ''
     data.vertexPrivateKey ??= ''
     data.seperateParametersEnabled ??= false
-    data.seperateParameters = {
+    data.seperateParameters ??= {
         memory: {},
         emotion: {},
         translate: {},
         otherAx: {}
     }
+    data.customFlags ??= []
+    data.enableCustomFlags ??= false
+    data.assetMaxDifference ??= 4
+    data.showSavingIcon ??= false
+    data.banCharacterset ??= []
+    data.showPromptComparison ??= false
+    data.checkCorruption ??= true
     changeLanguage(data.language)
     setDatabaseLite(data)
 }
 
 export function setDatabaseLite(data:Database){
-    if(import.meta.env.DEV){
-        console.trace('setDatabaseLite executed')
-    }
     DBState.db = data
 }
 
@@ -629,6 +637,7 @@ export interface Database{
     useStreaming:boolean
     palmAPI:string,
     supaMemoryKey:string
+    hypaMemoryKey:string
     supaModelType:string
     textScreenColor?:string
     textBorder?:boolean
@@ -698,7 +707,7 @@ export interface Database{
     colorSchemeName:string
     promptTemplate?:PromptItem[]
     forceProxyAsOpenAI?:boolean
-    hypaModel:'ada'|'MiniLM'
+    hypaModel:HypaModel
     saveTime?:number
     mancerHeader:string
     emotionProcesser:'submodel'|'embedding',
@@ -847,6 +856,23 @@ export interface Database{
         otherAx: SeparateParameters
     }
     translateBeforeHTMLFormatting:boolean
+    autoTranslateCachedOnly:boolean
+    lightningRealmImport:boolean
+    notification: boolean
+    customFlags: LLMFlags[]
+    enableCustomFlags: boolean
+    googleClaudeTokenizing: boolean
+    presetChain: string
+    legacyMediaFindings?:boolean
+    geminiStream?:boolean
+    assetMaxDifference:number
+    menuSideBar:boolean
+    pluginV2: RisuPlugin[]
+    showSavingIcon:boolean
+    presetRegex: customscript[]
+    banCharacterset:string[]
+    showPromptComparison:boolean
+    checkCorruption:boolean
 }
 
 interface SeparateParameters{
@@ -1166,6 +1192,10 @@ export interface botPreset{
     systemContentReplacement?: string
     systemRoleReplacement?: 'user'|'assistant'
     openAIPrediction?: string
+    enableCustomFlags?: boolean
+    customFlags?: LLMFlags[]
+    image?:string
+    regex?:customscript[]
 }
 
 
@@ -1180,6 +1210,8 @@ export interface folder{
     data:string[]
     color:string
     id:string
+    imgFile?:string
+    img?:string
 }
 
 
@@ -1228,7 +1260,7 @@ export interface Chat{
     localLore: loreBook[]
     sdData?:string
     supaMemoryData?:string
-    hypaV2Data?:HypaV2Data
+    hypaV2Data?:SerializableHypaV2Data
     lastMemory?:string
     suggestMessages?:string[]
     isStreaming?:boolean
@@ -1464,6 +1496,10 @@ export function saveCurrentPreset(){
         customAPIFormat: safeStructuredClone(db.customAPIFormat),
         systemContentReplacement: db.systemContentReplacement,
         systemRoleReplacement: db.systemRoleReplacement,
+        customFlags: safeStructuredClone(db.customFlags),
+        enableCustomFlags: db.enableCustomFlags,
+        regex: db.presetRegex,
+        image: pres?.[db.botPresetsId]?.image ?? '',
     }
     db.botPresets = pres
     setDatabase(db)
@@ -1539,8 +1575,9 @@ export function setPreset(db:Database, newPres: botPreset){
         postEndInnerFormat: '',
         sendChatAsSystem: false,
         sendName: false,
-        utilOverride: false
+        utilOverride: false,
     }
+    db.promptSettings.maxThoughtTagDepth ??= -1
     db.repetition_penalty = newPres.repetition_penalty
     db.min_p = newPres.min_p
     db.top_a = newPres.top_a
@@ -1569,6 +1606,9 @@ export function setPreset(db:Database, newPres: botPreset){
     db.customAPIFormat = safeStructuredClone(newPres.customAPIFormat) ?? LLMFormat.OpenAICompatible
     db.systemContentReplacement = newPres.systemContentReplacement ?? ''
     db.systemRoleReplacement = newPres.systemRoleReplacement ?? 'user'
+    db.customFlags = safeStructuredClone(newPres.customFlags) ?? []
+    db.enableCustomFlags = newPres.enableCustomFlags ?? false
+    db.presetRegex = newPres.regex ?? []
     return db
 }
 
@@ -1576,11 +1616,12 @@ import { encode as encodeMsgpack, decode as decodeMsgpack } from "msgpackr";
 import * as fflate from "fflate";
 import type { OnnxModelFiles } from '../process/transformers';
 import type { RisuModule } from '../process/modules';
-import type { HypaV2Data } from '../process/memory/hypav2';
+import type { SerializableHypaV2Data } from '../process/memory/hypav2';
 import { decodeRPack, encodeRPack } from '../rpack/rpack_bg';
 import { DBState, selectedCharID } from '../stores.svelte';
-import { LLMFormat } from '../model/modellist';
+import { LLMFlags, LLMFormat } from '../model/modellist';
 import type { Parameter } from '../process/request';
+import type { HypaModel } from '../process/memory/hypamemory';
 
 export async function downloadPreset(id:number, type:'json'|'risupreset'|'return' = 'json'){
     saveCurrentPreset()
@@ -1593,6 +1634,12 @@ export async function downloadPreset(id:number, type:'json'|'risupreset'|'return
     pres.proxyKey = ''
     pres.textgenWebUIStreamURL=  ''
     pres.textgenWebUIBlockingURL=  ''
+
+    if((pres.image || pres.regex?.length > 0) && type !== 'return'){
+        alertError("Preset with image or regexes cannot be exported for now. use RisuRealm to share the preset.")
+        return
+    }
+
     if(type === 'json'){
         downloadFile(pres.name + "_preset.json", Buffer.from(JSON.stringify(pres, null, 2)))
     }
@@ -1605,15 +1652,16 @@ export async function downloadPreset(id:number, type:'json'|'risupreset'|'return
                 'risupreset'
             )
         }))
-        
+
+        const buf2 = await encodeRPack(buf)
+
         if(type === 'risupreset'){
-            const buf2 = await encodeRPack(buf)
             downloadFile(pres.name + "_preset.risup", buf2)
         }
         else{
             return {
                 data: pres,
-                buf
+                buf: buf2
             }
         }
 
