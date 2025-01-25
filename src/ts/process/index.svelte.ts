@@ -29,6 +29,7 @@ import { hypaMemoryV2 } from "./memory/hypav2";
 import { runLuaEditTrigger } from "./lua";
 import { parseChatML } from "../parser.svelte";
 import { getModelInfo, LLMFlags } from "../model/modellist";
+import { hypaMemoryV3 } from "./memory/hypav3";
 
 export interface OpenAIChat{
     role: 'system'|'user'|'assistant'|'function'
@@ -550,7 +551,10 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     let content = positionParser(card.text)
 
                     if(card.type2 === 'globalNote'){
-                        content = (risuChatParser(currentChar.replaceGlobalNote?.replaceAll('{{original}}', content) || content, {chara: currentChar, role: card.role}))
+                        if(currentChar.replaceGlobalNote){
+                            content = positionParser(currentChar.replaceGlobalNote).replaceAll('{{original}}', content)
+                        }
+                        content = (risuChatParser(content, {chara: currentChar, role: card.role}))
                     }
                     else if(card.type2 === 'main'){
                         content = (risuChatParser(content, {chara: currentChar, role: card.role}))
@@ -668,9 +672,9 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
     let index = 0
     for(const msg of ms){
-        let formatedChat = await processScript(nowChatroom,risuChatParser(msg.data, {chara: currentChar, role: msg.role}), 'editprocess', {
+        let formatedChat = (await processScriptFull(nowChatroom,risuChatParser(msg.data, {chara: currentChar, role: msg.role}), 'editprocess', index, {
             chatRole: msg.role,
-        })
+        })).data
         let name = ''
         if(msg.role === 'char'){
             if(msg.saying){
@@ -790,7 +794,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
         currentTokens += await tokenizer.tokenizeChat(chat)
     }
     
-    if(nowChatroom.supaMemory && (DBState.db.supaModelType !== 'none' || DBState.db.hanuraiEnable || DBState.db.hypav2)){
+    if(nowChatroom.supaMemory && (DBState.db.supaModelType !== 'none' || DBState.db.hanuraiEnable || DBState.db.hypav2 || DBState.db.hypaV3)){
         chatProcessStage.set(2)
         if(DBState.db.hanuraiEnable){
             const hn = await hanuraiMemory(chats, {
@@ -821,6 +825,27 @@ export async function sendChat(chatProcessIndex = -1,arg:{
 
             currentChat = DBState.db.characters[selectedChar].chats[selectedChat];
             console.log("[Expected to be updated] chat's HypaV2Data: ", currentChat.hypaV2Data)
+        }
+        else if(DBState.db.hypaV3){
+            console.log("Current chat's hypaV3 Data: ", currentChat.hypaV3Data)
+            const sp = await hypaMemoryV3(chats, currentTokens, maxContextTokens, currentChat, nowChatroom, tokenizer)
+            if(sp.error){
+                // Save new summary
+                if (sp.memory) {
+                    currentChat.hypaV3Data = sp.memory
+                    DBState.db.characters[selectedChar].chats[selectedChat].hypaV3Data = currentChat.hypaV3Data
+                }
+                console.log(sp)
+                alertError(sp.error)
+                return false
+            }
+            chats = sp.chats
+            currentTokens = sp.currentTokens
+            currentChat.hypaV3Data = sp.memory ?? currentChat.hypaV3Data
+            DBState.db.characters[selectedChar].chats[selectedChat].hypaV3Data = currentChat.hypaV3Data
+    
+            currentChat = DBState.db.characters[selectedChar].chats[selectedChat];
+            console.log("[Expected to be updated] chat's HypaV3Data: ", currentChat.hypaV3Data)
         }
         else{
             const sp = await supaMemory(chats, currentTokens, maxContextTokens, currentChat, nowChatroom, tokenizer, {
@@ -1028,7 +1053,10 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                     let content = positionParser(card.text)
 
                     if(card.type2 === 'globalNote'){
-                        content = (risuChatParser(currentChar.replaceGlobalNote?.replaceAll('{{original}}', content) || content, {chara:currentChar, role: card.role}))
+                        if(currentChar.replaceGlobalNote){
+                            content = positionParser(currentChar.replaceGlobalNote).replaceAll('{{original}}', content)
+                        }
+                        content = (risuChatParser(content, {chara: currentChar, role: card.role}))
                     }
                     else if(card.type2 === 'main'){
                         content = (risuChatParser(content, {chara: currentChar, role: card.role}))

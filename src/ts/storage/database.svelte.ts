@@ -12,7 +12,7 @@ import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
-export let appVer = "146.1.0"
+export let appVer = "147.0.0"
 export let webAppSubVer = ''
 
 
@@ -471,6 +471,15 @@ export function setDatabase(data:Database){
     data.banCharacterset ??= []
     data.showPromptComparison ??= false
     data.checkCorruption ??= true
+    data.hypaV3Settings = {
+        memoryTokensRatio: data.hypaV3Settings?.memoryTokensRatio ?? 0.2,
+        extraSummarizationRatio: data.hypaV3Settings?.extraSummarizationRatio ?? 0.2,
+        maxChatsPerSummary: data.hypaV3Settings?.maxChatsPerSummary ?? 4,
+        recentMemoryRatio: data.hypaV3Settings?.recentMemoryRatio ?? 0.4,
+        similarMemoryRatio: data.hypaV3Settings?.similarMemoryRatio ?? 0.4,
+        enableSimilarityCorrection: data.hypaV3Settings?.enableSimilarityCorrection ?? false,
+        preserveOrphanedMemory: data.hypaV3Settings?.preserveOrphanedMemory ?? false
+    }
     changeLanguage(data.language)
     setDatabaseLite(data)
 }
@@ -873,6 +882,16 @@ export interface Database{
     banCharacterset:string[]
     showPromptComparison:boolean
     checkCorruption:boolean
+    hypaV3:boolean
+    hypaV3Settings: {
+        memoryTokensRatio: number
+        extraSummarizationRatio: number
+        maxChatsPerSummary: number
+        recentMemoryRatio: number
+        similarMemoryRatio: number
+        enableSimilarityCorrection: boolean
+        preserveOrphanedMemory: boolean
+    }
 }
 
 interface SeparateParameters{
@@ -1269,6 +1288,7 @@ export interface Chat{
     id?:string
     bindedPersona?:string
     fmIndex?:number
+    hypaV3Data?:SerializableHypaV3Data
 }
 
 export interface Message{
@@ -1622,6 +1642,7 @@ import { DBState, selectedCharID } from '../stores.svelte';
 import { LLMFlags, LLMFormat } from '../model/modellist';
 import type { Parameter } from '../process/request';
 import type { HypaModel } from '../process/memory/hypamemory';
+import type { SerializableHypaV3Data } from '../process/memory/hypav3';
 
 export async function downloadPreset(id:number, type:'json'|'risupreset'|'return' = 'json'){
     saveCurrentPreset()

@@ -111,11 +111,23 @@
         return prompt
     }
 
-    async function checkDiff(prompt1: string, prompt2: string): Promise<string> {
+    async function checkDiff(prompt1: string, prompt2: string): Promise<void> {
         const { diffLines } = await import('diff')
         const lineDiffs = diffLines(prompt1, prompt2)
 
         let resultHtml = '';
+        let changedLines: string[] = []
+        let modifiedLinesCount = 0
+        let addedLinesCount = 0
+        let removedLinesCount = 0
+
+        const forTooltip = (line: string, idx: number): string => {
+            return line.replace('<div', `<div class="prompt-diff-hover" data-line-id="prompt-diff-line-${idx}"`)
+        }
+
+        const withId = (line: string, idx: number): string => {
+            return line.replace('<div', `<div id="prompt-diff-line-${idx}"`)
+        }
 
         for (let i = 0; i < lineDiffs.length; i++) {
             const linePart = lineDiffs[i]
@@ -123,15 +135,24 @@
             if(linePart.removed){
                 const nextPart = lineDiffs[i + 1]
                 if(nextPart?.added){
-                    resultHtml += `<div style="border-left: 4px solid blue; padding-left: 8px;">${await highlightChanges(linePart.value, nextPart.value)}</div>`
+                    const modifiedLine = `<div style="border-left: 4px solid blue; padding-left: 8px;">${await highlightChanges(linePart.value, nextPart.value)}</div>`
+                    changedLines.push(forTooltip(modifiedLine, i))
+                    resultHtml += withId(modifiedLine, i)
                     i++;
+                    modifiedLinesCount += 1
                 }
                 else{
-                    resultHtml += `<div style="color: red; background-color: #ffe6e6; border-left: 4px solid red; padding-left: 8px;">${escapeHtml(linePart.value)}</div>`
+                    const removedLine = `<div style="color: red; background-color: #ffe6e6; border-left: 4px solid red; padding-left: 8px;">${escapeHtml(linePart.value)}</div>`
+                    changedLines.push(forTooltip(removedLine, i))
+                    resultHtml += withId(removedLine, i)
+                    removedLinesCount += 1
                 }
             }
             else if(linePart.added){
-                resultHtml += `<div style="color: green; background-color: #e6ffe6; border-left: 4px solid green; padding-left: 8px;">${escapeHtml(linePart.value)}</div>`
+                const addedLine = `<div style="color: green; background-color: #e6ffe6; border-left: 4px solid green; padding-left: 8px;">${escapeHtml(linePart.value)}</div>`
+                changedLines.push(forTooltip(addedLine, i))
+                resultHtml += withId(addedLine, i)
+                addedLinesCount += 1
             }
             else{
                 resultHtml += `<div>${escapeHtml(linePart.value)}</div>`
@@ -139,13 +160,29 @@
         }
 
         if(lineDiffs.length === 1 && !lineDiffs[0].added && !lineDiffs[0].removed) {
-            resultHtml = `<div style="background-color: #4caf50; color: white; padding: 10px 20px; border-radius: 5px; text-align: center;">No differences detected.</div>` + resultHtml
+            const userResponse = await alertConfirm('The two prompts are identical. Would you like to review the content?')
+
+            if(userResponse){
+                resultHtml = `<div style="background-color: #4caf50; color: white; padding: 10px 20px; border-radius: 5px; text-align: center;">No differences detected.</div>` + resultHtml
+                alertMd(resultHtml)
+            }
         }
         else{
-            resultHtml = `<div style="background-color: #ff9800; color: white; padding: 10px 20px; border-radius: 5px; text-align: center;">Differences detected. Please review the changes.</div>` + resultHtml
-        }
+            const modifiedCount = `<span style="border-left: 4px solid blue; padding-left: 8px; padding-right: 8px;">${modifiedLinesCount}</span>`
+            const addedCount = `<span style="border-left: 4px solid green; padding-left: 8px; padding-right: 8px;">${addedLinesCount}</span>`
+            const removedCount = `<span style="border-left: 4px solid red; padding-left: 8px; padding-right: 8px;">${removedLinesCount}</span>`
+            const diffCounts = `<div>${modifiedCount}${addedCount}${removedCount}</div>`
 
-        return resultHtml
+            resultHtml = `<div id="differences-detected" style="background-color: #ff9800; color: white; padding: 10px 20px; border-radius: 5px; text-align: center;">Differences detected. Please review the changes.${diffCounts}</div>` + resultHtml
+            alertMd(resultHtml)
+
+            setTimeout(() => {
+                const differencesDetected = document.querySelector('#differences-detected');
+                if (differencesDetected) {
+                    differencesTooltip(changedLines)
+                }
+            }, 0)
+        }
     }
 
     async function highlightChanges(string1: string, string2: string) {
@@ -167,6 +204,60 @@
                 }
             })
             .join('')
+    }
+
+    function differencesTooltip(changedLines: string[]) {
+        const differencesDetected = document.querySelector('#differences-detected')
+        if(!differencesDetected){
+            return
+        }
+
+        const tooltip = document.createElement('div')
+        tooltip.id = 'diff-tooltip'
+        tooltip.style.display = 'none'
+        tooltip.style.position = 'absolute'
+        tooltip.style.backgroundColor = '#282a36'
+        tooltip.style.padding = '10px'
+        tooltip.style.borderRadius = '5px'
+        tooltip.style.boxShadow = '0px 5px 5px rgba(0, 0, 0, 1)'
+        tooltip.style.maxWidth = '500px'
+        tooltip.style.overflowY = 'auto'
+        tooltip.style.maxHeight = '300px'
+        tooltip.style.textAlign = 'initial'
+
+        differencesDetected.appendChild(tooltip)
+
+        differencesDetected.addEventListener('mouseenter', () => {
+            const tooltipContent = !changedLines.length ? '' : `<div><strong>Changed Lines</strong></div>
+                <div>${changedLines.join('<br>')}</div>`
+
+            tooltip.innerHTML = tooltipContent;
+            tooltip.style.display = 'block'
+        })
+
+        tooltip.addEventListener('click', (e) => {
+            const target = (e.target as HTMLElement).closest('.prompt-diff-hover')
+            const lineId = target?.getAttribute('data-line-id')
+            if(!lineId){
+                return
+            }
+
+            const targetElement = document.getElementById(lineId)
+            if(!targetElement){
+                return
+            }
+
+            targetElement.classList.add('prompt-diff-highlight')
+            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+            setTimeout(() => {
+                targetElement.classList.remove('prompt-diff-highlight')
+            }, 1000)
+        })
+
+        differencesDetected.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none'
+        })
     }
     
 
@@ -194,8 +285,8 @@
         }
         else{
             alertWait("Loading...")
-            const result = await checkDiff(selectedPrompts[0], prompt)
-            alertMd(result)
+            await checkDiff(selectedPrompts[0], prompt)
+
             selectedDiffPreset = -1
             selectedPrompts = []
         }
@@ -329,5 +420,20 @@
     .break-any{
         word-break: normal;
         overflow-wrap: anywhere;
+    }
+
+    :global(.prompt-diff-hover){
+        border-radius: 8px;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    :global(.prompt-diff-hover:hover){
+        transform: translateY(-4px);
+        box-shadow: 0px 8px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    :global(.prompt-diff-highlight){
+        background-color: yellow !important;
     }
 </style>

@@ -22,8 +22,9 @@
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme";
     import Help from "./Help.svelte";
     import { getChatBranches } from "src/ts/gui/branches";
-  import { getCurrentCharacter } from "src/ts/storage/database.svelte";
-  import { message } from "@tauri-apps/plugin-dialog";
+    import { getCurrentCharacter } from "src/ts/storage/database.svelte";
+    import { message } from "@tauri-apps/plugin-dialog";
+    import HypaV3Modal from './HypaV3Modal.svelte';
     let btn
     let input = $state('')
     let cardExportType = $state('realm')
@@ -316,6 +317,8 @@
                         </div>
                     {/each}
                 {/if}
+            {:else if $alertStore.type === "hypaV3"}
+                <HypaV3Modal />
             {:else if $alertStore.type === 'addchar'}
                 <div class="w-2xl flex flex-col max-w-full">
 
