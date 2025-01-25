@@ -1763,6 +1763,13 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
         url = `https://generativelanguage.googleapis.com/v1beta/models/${arg.modelInfo.internalID}:generateContent?key=${db.google.accessToken}`
     }
 
+    // gemini 제미니 모델 include_thoughts  
+    if(arg.modelInfo.internalID.includes("think")){
+        url=url.replace(/\/v1beta/g, '/v1alpha')
+        body.generation_config.thinking_config = {
+            include_thoughts: true
+        }
+    }
 
     if(arg.modelInfo.format === LLMFormat.GoogleCloud && arg.useStreaming){
         headers['Content-Type'] = 'application/json'
