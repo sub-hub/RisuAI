@@ -1634,7 +1634,8 @@ export async function downloadPreset(id:number, type:'json'|'risupreset'|'return
     pres.proxyKey = ''
     pres.textgenWebUIStreamURL=  ''
     pres.textgenWebUIBlockingURL=  ''
-
+    type='json'
+    
     if((pres.image || pres.regex?.length > 0) && type !== 'return'){
         alertError("Preset with image or regexes cannot be exported for now. use RisuRealm to share the preset.")
         return
