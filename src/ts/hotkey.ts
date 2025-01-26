@@ -7,6 +7,19 @@ import { updateTextThemeAndCSS } from "./gui/colorscheme"
 
 export function initHotkey(){
     document.addEventListener('keydown', (ev) => {
+        if(ev.shiftKey){
+            console.log(ev.key)
+            switch(ev.key){
+                case 'E':{
+                    ev.preventDefault()
+                    clickQuery('.button-icon-edit')
+                    setTimeout(() => {
+                        focusQuery('.message-edit-area')
+                    }, 100)
+                    return
+                }
+            }
+        }
         if(ev.ctrlKey){
 
             if(ev.altKey){
@@ -31,14 +44,14 @@ export function initHotkey(){
                         clickQuery('.button-icon-remove')
                         return
                     }
-                    case 'e':{
-                        ev.preventDefault()
-                        clickQuery('.button-icon-edit')
-                        setTimeout(() => {
-                            focusQuery('.message-edit-area')
-                        }, 100)
-                        return
-                    }
+                    // case 'e':{
+                    //     ev.preventDefault()
+                    //     clickQuery('.button-icon-edit')
+                    //     setTimeout(() => {
+                    //         focusQuery('.message-edit-area')
+                    //     }, 100)
+                    //     return
+                    // }
                     case 'c':{
                         ev.preventDefault()
                         clickQuery('.button-icon-copy')
