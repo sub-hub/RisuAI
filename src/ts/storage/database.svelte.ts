@@ -12,7 +12,7 @@ import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
-export let appVer = "147.0.0"
+export let appVer = "148.1.0"
 export let webAppSubVer = ''
 
 
@@ -471,6 +471,7 @@ export function setDatabase(data:Database){
     data.banCharacterset ??= []
     data.showPromptComparison ??= false
     data.checkCorruption ??= true
+    data.OaiCompAPIKeys ??= {}
     data.hypaV3Settings = {
         memoryTokensRatio: data.hypaV3Settings?.memoryTokensRatio ?? 0.2,
         extraSummarizationRatio: data.hypaV3Settings?.extraSummarizationRatio ?? 0.2,
@@ -478,7 +479,8 @@ export function setDatabase(data:Database){
         recentMemoryRatio: data.hypaV3Settings?.recentMemoryRatio ?? 0.4,
         similarMemoryRatio: data.hypaV3Settings?.similarMemoryRatio ?? 0.4,
         enableSimilarityCorrection: data.hypaV3Settings?.enableSimilarityCorrection ?? false,
-        preserveOrphanedMemory: data.hypaV3Settings?.preserveOrphanedMemory ?? false
+        preserveOrphanedMemory: data.hypaV3Settings?.preserveOrphanedMemory ?? false,
+        processRegexScript: data.hypaV3Settings?.processRegexScript ?? false
     }
     changeLanguage(data.language)
     setDatabaseLite(data)
@@ -891,7 +893,10 @@ export interface Database{
         similarMemoryRatio: number
         enableSimilarityCorrection: boolean
         preserveOrphanedMemory: boolean
-    }
+        processRegexScript: boolean
+    },
+    OaiCompAPIKeys: {[key:string]:string}
+    inlayErrorResponse:boolean
 }
 
 interface SeparateParameters{
