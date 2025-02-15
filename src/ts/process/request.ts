@@ -1,5 +1,5 @@
 import type { MultiModal, OpenAIChat, OpenAIChatFull } from "./index.svelte";
-import { getCurrentCharacter, getDatabase, setDatabase, type character } from "../storage/database.svelte";
+import { getCurrentCharacter, getCurrentChat, getDatabase, setDatabase, type character } from "../storage/database.svelte";
 import { pluginProcess, pluginV2 } from "../plugins/plugins";
 import { language } from "../../lang";
 import { stringlizeAINChat, getStopStrings, unstringlizeAIN, unstringlizeChat } from "./stringlize";
@@ -21,6 +21,7 @@ import { applyChatTemplate } from "./templates/chatTemplate";
 import { OobaParams } from "./prompt";
 import { extractJSON, getGeneralJSONSchema, getOpenAIJSONSchema } from "./templates/jsonSchema";
 import { getModelInfo, LLMFlags, LLMFormat, type LLMModel } from "../model/modellist";
+import { runTrigger } from "./triggers";
 
 
 
@@ -91,7 +92,7 @@ interface OaiFunctions {
 }
 
 
-export type Parameter = 'temperature'|'top_k'|'repetition_penalty'|'min_p'|'top_a'|'top_p'|'frequency_penalty'|'presence_penalty'
+export type Parameter = 'temperature'|'top_k'|'repetition_penalty'|'min_p'|'top_a'|'top_p'|'frequency_penalty'|'presence_penalty'|'reasoning_effort'
 export type ModelModeExtended = 'model'|'submodel'|'memory'|'emotion'|'otherAx'|'translate'
 type ParameterMap = {
     [key in Parameter]?: string;
@@ -101,6 +102,24 @@ function applyParameters(data: { [key: string]: any }, parameters: Parameter[], 
     ignoreTopKIfZero?:boolean
 } = {}): { [key: string]: any } {
     const db = getDatabase()
+
+    function getEffort(effort:number){
+        switch(effort){
+            case 0:{
+                return 'low'
+            }
+            case 1:{
+                return 'medium'
+            }
+            case 2:{
+                return 'high'
+            }
+            default:{
+                return 'medium'
+            }
+        }
+    }
+
     if(db.seperateParametersEnabled && ModelMode !== 'model'){
         if(ModelMode === 'submodel'){
             ModelMode = 'otherAx'
@@ -108,7 +127,7 @@ function applyParameters(data: { [key: string]: any }, parameters: Parameter[], 
 
         for(const parameter of parameters){
             
-            let value = 0
+            let value:number|string = 0
             if(parameter === 'top_k' && arg.ignoreTopKIfZero && db.seperateParameters[ModelMode][parameter] === 0){
                 continue
             }
@@ -146,6 +165,10 @@ function applyParameters(data: { [key: string]: any }, parameters: Parameter[], 
                     value = db.seperateParameters[ModelMode].presence_penalty === -1000 ? -1000 : (db.seperateParameters[ModelMode].presence_penalty / 100)
                     break
                 }
+                case 'reasoning_effort':{
+                    value = getEffort(db.seperateParameters[ModelMode].reasoning_effort)
+                    break
+                }
             }
 
             if(value === -1000 || value === undefined){
@@ -159,7 +182,7 @@ function applyParameters(data: { [key: string]: any }, parameters: Parameter[], 
 
 
     for(const parameter of parameters){
-        let value = 0
+        let value:number|string = 0
         if(parameter === 'top_k' && arg.ignoreTopKIfZero && db.top_k === 0){
             continue
         }
@@ -186,6 +209,10 @@ function applyParameters(data: { [key: string]: any }, parameters: Parameter[], 
             }
             case 'top_p':{
                 value = db.top_p
+                break
+            }
+            case 'reasoning_effort':{
+                value = getEffort(db.reasoningEffort)
                 break
             }
             case 'frequency_penalty':{
@@ -217,6 +244,29 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
                 arg.formated = await replacer(arg.formated, model)
             }
         }
+        
+        try{
+            const currentChar = getCurrentCharacter()
+            if(currentChar.type !== 'group'){
+                const perf = performance.now()
+                const d = await runTrigger(currentChar, 'request', {
+                    chat: getCurrentChat(),
+                    displayMode: true,
+                    displayData: JSON.stringify(arg.formated)
+                })
+    
+                const got = JSON.parse(d.displayData)
+                if(!got || !Array.isArray(got)){
+                    throw new Error('Invalid return')
+                }
+                arg.formated = got
+                console.log('Trigger time', performance.now() - perf)
+            }
+        }
+        catch(e){
+            console.error(e)
+        }
+        
 
         const da = await requestChatDataMain(arg, model, abortSignal)
 
@@ -769,7 +819,7 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
 
     body = applyParameters(
         body,
-        aiModel === 'openrouter' ? ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'min_p', 'top_a', 'top_k'] : ['temperature', 'top_p', 'frequency_penalty', 'presence_penalty'],
+        arg.modelInfo.parameters,
         {},
         arg.mode
     )
@@ -1711,6 +1761,10 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
             "threshold": "BLOCK_NONE"
         }
     ]
+
+    if(arg.modelInfo.flags.includes(LLMFlags.noCivilIntegrity)){
+        uncensoredCatagory.splice(4, 1)
+    }
 
     if(arg.modelInfo.flags.includes(LLMFlags.geminiBlockOff)){
         for(let i=0;i<uncensoredCatagory.length;i++){

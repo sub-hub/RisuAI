@@ -419,6 +419,64 @@ export async function runLua(code:string, arg:{
                 return true
             })
 
+            luaEngine.global.set('axLLMMain', async (id:string, promptStr:string) => {
+                let prompt:{
+                    role: string,
+                    content: string
+                }[] = JSON.parse(promptStr)
+                if(!LuaLowLevelIds.has(id)){
+                    return
+                }
+                let promptbody:OpenAIChat[] = prompt.map((dict) => {
+                    let role:'system'|'user'|'assistant' = 'assistant'
+                    switch(dict['role']){
+                        case 'system':
+                        case 'sys':
+                            role = 'system'
+                            break
+                        case 'user':
+                            role = 'user'
+                            break
+                        case 'assistant':
+                        case 'bot':
+                        case 'char':{
+                            role = 'assistant'
+                            break
+                        }
+                    }
+
+                    return {
+                        content: dict['content'] ?? '',
+                        role: role,
+                    }
+                })
+                const result = await requestChatData({
+                    formated: promptbody,
+                    bias: {},
+                    useStreaming: false,
+                    noMultiGen: true,
+                }, 'otherAx')
+
+                if(result.type === 'fail'){
+                    return JSON.stringify({
+                        success: false,
+                        result: 'Error: ' + result.result
+                    })
+                }
+
+                if(result.type === 'streaming' || result.type === 'multiline'){
+                    return JSON.stringify({
+                        success: false,
+                        result: result.result
+                    })
+                }
+
+                return JSON.stringify({
+                    success: true,
+                    result: result.result
+                })
+            })
+
             await luaEngine.doString(luaCodeWarper(code))
             luaEngineState.code = code
         }
@@ -454,6 +512,13 @@ export async function runLua(code:string, arg:{
                     const func = luaEngine.global.get('onStart')
                     if(func){
                         res = await func(accessKey)
+                    }
+                    break
+                }
+                case 'onButtonClick':{
+                    const func = luaEngine.global.get('onButtonClick')
+                    if(func){
+                        res = await func(accessKey, data)
                     }
                     break
                 }
@@ -529,6 +594,10 @@ end
 
 function LLM(id, prompt)
     return json.decode(LLMMain(id, json.encode(prompt)):await())
+end
+
+function axLLM(id, prompt)
+    return json.decode(axLLMMain(id, json.encode(prompt)):await())
 end
 
 local editRequestFuncs = {}
@@ -675,4 +744,25 @@ export async function runLuaEditTrigger<T extends any>(char:character|groupChat|
     } catch (error) {
         return content
     }
+}
+
+export async function runLuaButtonTrigger(char:character|groupChat|simpleCharacterArgument, data:string):Promise<any>{
+    let runResult
+    try {
+        const triggers = char.type === 'group' ? getModuleTriggers() : char.triggerscript.concat(getModuleTriggers())
+        const lowLevelAccess = char.type !== 'simple' ? char.lowLevelAccess ?? false : false
+        for(let trigger of triggers){
+            if(trigger?.effect?.[0]?.type === 'triggerlua'){
+                runResult = await runLua(trigger.effect[0].code, {
+                    char: char,
+                    lowLevelAccess: lowLevelAccess,
+                    mode: 'onButtonClick',
+                    data: data
+                })
+            }
+        }
+    } catch (error) {
+        throw(error)
+    }
+    return runResult   
 }

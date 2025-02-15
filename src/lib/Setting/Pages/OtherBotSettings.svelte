@@ -17,6 +17,9 @@
     import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
     import { untrack } from "svelte";
+    import { tokenizePreset } from "src/ts/process/prompt";
+    import { getCharToken } from "src/ts/tokenizer";
+    import { selectedCharID } from "src/ts/stores.svelte";
 
     $effect.pre(() => {
         DBState.db.NAIImgConfig ??= {
@@ -53,7 +56,7 @@
                 DBState.db.hypaV3Settings.similarMemoryRatio = 1 - newValue;
             }
         })
-    })
+    });
 
     $effect(() => {
         const newValue = Math.min(DBState.db.hypaV3Settings.similarMemoryRatio, 1);
@@ -66,6 +69,24 @@
             }
         })
     });
+
+    async function getMaxMemoryRatio(): Promise<number> {
+        const promptTemplateToken = await tokenizePreset(DBState.db.promptTemplate);
+        const char = DBState.db.characters[$selectedCharID];
+        const charToken = await getCharToken(char);
+        const maxLoreToken = char.loreSettings?.tokenBudget ?? DBState.db.loreBookToken;
+        const maxResponse = DBState.db.maxResponse;
+        const requiredToken = promptTemplateToken + charToken.persistant + Math.min(charToken.dynamic, maxLoreToken) + maxResponse * 3;
+        const maxContext = DBState.db.maxContext;
+
+        if (maxContext === 0) {
+            return 0;
+        }
+
+        const maxMemoryRatio = Math.max((maxContext - requiredToken) / maxContext, 0);
+
+        return parseFloat(maxMemoryRatio.toFixed(2));
+    }
     // End HypaV3
 </script>
 <h2 class="mb-2 text-2xl font-bold mt-2">{language.otherBots}</h2>
@@ -446,6 +467,15 @@
                 DBState.db.hypav2 = false
                 DBState.db.hanuraiEnable = false
                 DBState.db.hypaV3 = true
+                DBState.db.hypaV3Settings.memoryTokensRatio = 0.2
+                DBState.db.hypaV3Settings.extraSummarizationRatio = 0
+                DBState.db.hypaV3Settings.maxChatsPerSummary = 4
+                DBState.db.hypaV3Settings.recentMemoryRatio = 0.4
+                DBState.db.hypaV3Settings.similarMemoryRatio = 0.4
+                DBState.db.hypaV3Settings.enableSimilarityCorrection = false
+                DBState.db.hypaV3Settings.preserveOrphanedMemory = false
+                DBState.db.hypaV3Settings.processRegexScript = false
+                DBState.db.hypaV3Settings.doNotSummarizeUserMessage = false
             } else {
                 DBState.db.supaModelType = 'none'
                 DBState.db.memoryAlgorithmType = 'none'
@@ -487,41 +517,46 @@
             <span class="text-textcolor">{language.hypaAllocatedTokens}</span>
             <NumberInput size="sm" marginBottom bind:value={DBState.db.hypaAllocatedTokens} min={100} />
         {:else if DBState.db.hypaV3}
-            <span class="mb-2 text-textcolor2 text-sm text-wrap break-words max-w-full">{language.hypaV3Desc}</span>
+            <span class="mb-2 text-textcolor2 text-sm text-wrap break-words max-w-full">{language.hypaV3Settings.descriptionLabel}</span>
             <span class="text-textcolor mt-4">{language.SuperMemory} {language.model}</span>
             <SelectInput className="mt-2 mb-2" bind:value={DBState.db.supaModelType}>
                 <OptionInput value="distilbart">distilbart-cnn-6-6 (Free/Local)</OptionInput>
                 <OptionInput value="subModel">{language.submodel}</OptionInput>
             </SelectInput>
-            {#if DBState.db.supaModelType === "instruct35"}
-                <span class="text-textcolor">OpenAI API Key</span>
-                <TextInput marginBottom size="sm" bind:value={DBState.db.supaMemoryKey} />
-            {/if}
             <span class="text-textcolor">{language.summarizationPrompt} <Help key="summarizationPrompt"/></span>
             <div class="mb-2">
-                <TextAreaInput size="sm" placeholder="Leave it blank to use default" bind:value={DBState.db.supaMemoryPrompt} />
-            </div> 
-            <span class="text-textcolor">Memory Tokens Ratio</span>
+                <TextAreaInput size="sm" placeholder={language.hypaV3Settings.supaMemoryPromptPlaceHolder} bind:value={DBState.db.supaMemoryPrompt} />
+            </div>
+            {#await getMaxMemoryRatio() then maxMemoryRatio}
+            <span class="text-textcolor">{language.hypaV3Settings.maxMemoryTokensRatioLabel}</span>
+            <NumberInput marginBottom disabled size="sm" value={maxMemoryRatio} />
+            {:catch error}
+            <span class="text-red-400">{language.hypaV3Settings.maxMemoryTokensRatioError}</span>
+            {/await}
+            <span class="text-textcolor">{language.hypaV3Settings.memoryTokensRatioLabel}</span>
             <SliderInput marginBottom min={0} max={1} step={0.01} fixed={2} bind:value={DBState.db.hypaV3Settings.memoryTokensRatio} />
-            <span class="text-textcolor">Extra Summarization Ratio</span>
+            <span class="text-textcolor">{language.hypaV3Settings.extraSummarizationRatioLabel}</span>
             <SliderInput marginBottom min={0} max={1 - DBState.db.hypaV3Settings.memoryTokensRatio} step={0.01} fixed={2} bind:value={DBState.db.hypaV3Settings.extraSummarizationRatio} />
-            <span class="text-textcolor">Max Chats Per Summary</span>
+            <span class="text-textcolor">{language.hypaV3Settings.maxChatsPerSummaryLabel}</span>
             <NumberInput marginBottom size="sm" min={1} bind:value={DBState.db.hypaV3Settings.maxChatsPerSummary} />
-            <span class="text-textcolor">Recent Memory Ratio</span>
+            <span class="text-textcolor">{language.hypaV3Settings.recentMemoryRatioLabel}</span>
             <SliderInput marginBottom min={0} max={1} step={0.01} fixed={2} bind:value={DBState.db.hypaV3Settings.recentMemoryRatio} />
-            <span class="text-textcolor">Similar Memory Ratio</span>
+            <span class="text-textcolor">{language.hypaV3Settings.similarMemoryRatioLabel}</span>
             <SliderInput marginBottom min={0} max={1} step={0.01} fixed={2} bind:value={DBState.db.hypaV3Settings.similarMemoryRatio} />
-            <span class="text-textcolor">Random Memory Ratio</span>
+            <span class="text-textcolor">{language.hypaV3Settings.randomMemoryRatioLabel}</span>
             <NumberInput marginBottom disabled size="sm" value={parseFloat((1 - DBState.db.hypaV3Settings.recentMemoryRatio - DBState.db.hypaV3Settings.similarMemoryRatio).toFixed(2))} />
             <div class="flex mb-2">
-                <Check name="Enable Similarity Correction" bind:check={DBState.db.hypaV3Settings.enableSimilarityCorrection} />
+                <Check name={language.hypaV3Settings.enableSimilarityCorrectionLabel} bind:check={DBState.db.hypaV3Settings.enableSimilarityCorrection} />
             </div>
             <div class="flex mb-2">
-                <Check name="Preserve Orphaned Memory" bind:check={DBState.db.hypaV3Settings.preserveOrphanedMemory} />
+                <Check name={language.hypaV3Settings.preserveOrphanedMemoryLabel} bind:check={DBState.db.hypaV3Settings.preserveOrphanedMemory} />
             </div>
             <div class="flex mb-2">
-                <Check name="Process Regex Script (Reroll Only)" bind:check={DBState.db.hypaV3Settings.processRegexScript} />
-            </div> 
+                <Check name={language.hypaV3Settings.applyRegexScriptWhenRerollingLabel} bind:check={DBState.db.hypaV3Settings.processRegexScript} />
+            </div>
+            <div class="flex mb-2">
+                <Check name={language.hypaV3Settings.doNotSummarizeUserMessageLabel} bind:check={DBState.db.hypaV3Settings.doNotSummarizeUserMessage} />
+            </div>
         {:else if (DBState.db.supaModelType !== 'none' && DBState.db.hypav2 === false && DBState.db.hypaV3 === false)}
             <span class="mb-2 text-textcolor2 text-sm text-wrap break-words max-w-full">{language.supaDesc}</span>
             <span class="text-textcolor mt-4">{language.SuperMemory} {language.model}</span>

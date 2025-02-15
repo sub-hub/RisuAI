@@ -41,7 +41,5 @@ recc.md
 __pycache__/
 .tauri/
 dist.zip
-scripts/
+/scripts/
 .env
-src-tauri/gen/schemas/desktop-schema.json
-src-tauri/gen/schemas/windows-schema.json

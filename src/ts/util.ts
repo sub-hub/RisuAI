@@ -1013,7 +1013,8 @@ export function parseKeyValue(template:string){
 
 export const sortableOptions = {
 	delay: 300, // time in milliseconds to define when the sorting should start
-	delayOnTouchOnly: true
+	delayOnTouchOnly: true,
+    filter: '.no-sort',
 } as const
 
 
