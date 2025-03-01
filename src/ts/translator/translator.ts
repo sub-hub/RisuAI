@@ -167,25 +167,30 @@ async function translateMain(text:string, arg:{from:string, to:string, host:stri
     if(db.useExperimentalGoogleTranslator){
 
         const hqAvailable = isTauri || isNodeServer || userScriptFetch
-
         if(hqAvailable){
             try {
-                const ua = navigator.userAgent
-                const d = await globalFetch(`https://translate.google.com/m?tl=${arg.to}&sl=${arg.from}&q=${encodeURIComponent(text)}`, {
+                const apiKey = "AIzaSyA6EEtrDCfBkHV8uU2lgGY-N383ZgAOo7Y"; 
+                const referer = "chrome-extension://mgijmajocgfcbeboacabfgobmjgjcoja";
+                const url = `https://dictionaryextension-pa.googleapis.com/v1/dictionaryExtensionData?language=${arg.to}&key=${apiKey}&term=${encodeURIComponent(text)}&strategy=2`
+                const f = await globalFetch(url, {
                     headers: {
-                        "User-Agent": ua,
-                        "Accept": "*/*",
+                        "x-referer": referer,
                     },
                     method: "GET",
                 })
-                const parser = new DOMParser()
-                const dom = parser.parseFromString(d.data, 'text/html')
-                const result = dom.querySelector('.result-container')?.textContent?.trim()
-                if(result){
-                    return result
+                
+                if(f.ok){
+                    const data = f.data;
+                    if(data.translateResponse){
+                         return data.translateResponse.translateText
+                    } else {
+                       return 'ERR::Experimental Google API Error: Invalid response format'
+                    }
+                }else{
+                    return 'ERR::Experimental Google API Error' + (await f.data)
                 }
             } catch (error) {
-                
+                return 'ERR::Experimental Google API Error' + error.toString()
             }
         }
     }
@@ -359,6 +364,7 @@ export async function translateHTML(html: string, reverse:boolean, charArg:simpl
                 return;
             }
 
+            // 원어 병기 표시
             if(translated!==node.textContent){
                 // translated+= '\n'
                 // translated += node.textContent;
