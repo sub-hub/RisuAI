@@ -15,7 +15,6 @@ import { supportsInlayImage } from "./files/inlays";
 import { Capacitor } from "@capacitor/core";
 import { getFreeOpenRouterModel } from "../model/openrouter";
 import { runTransformers } from "./transformers";
-import {createParser} from 'eventsource-parser'
 import {Ollama} from 'ollama/dist/browser.mjs'
 import { applyChatTemplate } from "./templates/chatTemplate";
 import { OobaParams } from "./prompt";
@@ -59,7 +58,8 @@ type requestDataResponse = {
     noRetry?: boolean,
     special?: {
         emotion?: string
-    }
+    },
+    failByServerError?: boolean
 }|{
     type: "streaming",
     result: ReadableStream<StreamResponseChunk>,
@@ -328,6 +328,13 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
 
         if(da.type !== 'fail' || da.noRetry){
             return da
+        }
+
+        if(da.failByServerError){
+            await sleep(1000)
+            if(db.antiServerOverloads){
+                trys -= 0.5 // reduce trys by 0.5, so that it will retry twice as much
+            }
         }
         
         trys += 1
@@ -1916,6 +1923,101 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
             include_thoughts: true
         }
     }
+    const fallBackGemini = async (originalError:string):Promise<requestDataResponse> => {
+        if(!db.antiServerOverloads){
+            return {
+                type: 'fail',
+                result: originalError,
+                failByServerError: true
+            }
+        }
+
+        if(arg?.abortSignal?.aborted){
+            return {
+                type: 'fail',
+                result: originalError,
+                failByServerError: true
+            }
+        }
+        if(arg.modelInfo.format === LLMFormat.VertexAIGemini){
+            return {
+                type: 'fail',
+                result: originalError,
+                failByServerError: true
+            }
+        }
+        try {
+            const OAIMessages:OpenAIChat[] = body.contents.map((v) => {
+                return {
+                    role: v.role === 'USER' ? 'user' : 'assistant',
+                    content: v.parts.map((v) => {
+                        return v.text ?? ''
+                    }).join('\n')
+                }
+            })
+            if(body?.systemInstruction?.parts?.[0]?.text){
+                OAIMessages.unshift({
+                    role: 'system',
+                    content: body.systemInstruction.parts[0].text
+                })
+            }
+            await sleep(2000)
+            const res = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+                body: JSON.stringify({
+                    model: arg.modelInfo.internalID,
+                    messages: OAIMessages,
+                    max_tokens: maxTokens,
+                    temperature: body.generation_config?.temperature,
+                    top_p: body.generation_config?.topP,
+                    presence_penalty: body.generation_config?.presencePenalty,
+                    frequency_penalty: body.generation_config?.frequencyPenalty,
+                }),
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${db.google.accessToken}`
+                },
+                signal: arg.abortSignal
+            })
+
+            if(!res.ok){
+                return {
+                    type: 'fail',
+                    result: originalError,
+                    failByServerError: true
+                }
+            }
+
+            if(arg?.abortSignal?.aborted){
+                return {
+                    type: 'fail',
+                    result: originalError
+                }
+            }
+
+            const d = await res.json()
+
+            if(d?.choices?.[0]?.message?.content){
+                return {
+                    type: 'success',
+                    result: d.choices[0].message.content
+                }
+            }
+            else{
+                return {
+                    type: 'fail',
+                    result: originalError,
+                    failByServerError: true
+                }
+            }
+        } catch (error) {
+            return {
+                type: 'fail',
+                result: originalError,
+                failByServerError: true
+            }
+        }
+    }
 
     if(arg.modelInfo.format === LLMFormat.GoogleCloud && arg.useStreaming){
         headers['Content-Type'] = 'application/json'
@@ -1927,9 +2029,13 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
         })
 
         if(f.status !== 200){
+            const text = await textifyReadableStream(f.body)
+            if(text.includes('RESOURCE_EXHAUSTED')){
+                return fallBackGemini(text)
+            }
             return {
                 type: 'fail',
-                result: await textifyReadableStream(f.body)
+                result: text
             }
         }
 
@@ -1994,8 +2100,13 @@ async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):Promise
         chatId: arg.chatId,
         abortSignal: arg.abortSignal,
     })
+    
 
     if(!res.ok){
+        const text = JSON.stringify(res.data)
+        if(text.includes('RESOURCE_EXHAUSTED')){
+            return fallBackGemini(text)
+        }
         return {
             type: 'fail',
             result: `${JSON.stringify(res.data)}`
@@ -2707,7 +2818,6 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
                 result: await textifyReadableStream(res.body)
             }
         }
-        let rerequesting = false
         let breakError = ''
         let thinking = false
 
@@ -2715,134 +2825,109 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
             async start(controller){
                 let text = ''
                 let reader = res.body.getReader()
+                let parserData = ''
                 const decoder = new TextDecoder()
-                const parser = createParser(async (e) => {
+                const parseEvent = (async (e:string) => {
                     try {               
-                        if(e.type === 'event'){
-                            switch(e.event){
-                                case 'content_block_delta': {
-                                    if(e.data){
-                                        const parsedData = JSON.parse(e.data)
-                                        if(parsedData.delta?.type === 'text' || parsedData.delta?.type === 'text_delta'){
-                                            if(thinking){
-                                                text += "</Thoughts>\n\n"
-                                                thinking = false
-                                            }
-                                            text += parsedData.delta?.text ?? ''
-                                            controller.enqueue({
-                                                "0": text
-                                            })
-                                        }
+                        const parsedData = JSON.parse(e)
 
-                                        if(parsedData.delta?.type === 'thinking' || parsedData.delta?.type === 'thinking_delta'){
-                                            if(!thinking){
-                                                text += "<Thoughts>\n"
-                                                thinking = true
-                                            }
-                                            text += parsedData.delta?.thinking ?? ''
-                                            controller.enqueue({
-                                                "0": text
-                                            })
-                                        }
-
-                                        if(parsedData?.delta?.type === 'redacted_thinking'){
-                                            if(!thinking){
-                                                text += "<Thoughts>\n"
-                                                thinking = true
-                                            }
-                                            text += '\n{{redacted_thinking}}\n'
-                                            controller.enqueue({
-                                                "0": text
-                                            })
-                                        }
-                                    }
-                                    break
+                        if(parsedData?.type === 'content_block_delta'){
+                            if(parsedData?.delta?.type === 'text' || parsedData.delta?.type === 'text_delta'){
+                                if(thinking){
+                                    text += "</Thoughts>\n\n"
+                                    thinking = false
                                 }
-                                case 'error': {
-                                    if(e.data){
-                                        const errormsg:string = JSON.parse(e.data).error?.message
-                                        if(errormsg && errormsg.toLocaleLowerCase().includes('overload') && db.antiClaudeOverload){
-                                            console.log('Overload detected, retrying...')
-                                            reader.cancel()
-                                            rerequesting = true
-                                            await sleep(2000)
-                                            body.max_tokens -= await tokenize(text)
-                                            if(body.max_tokens < 0){
-                                                body.max_tokens = 0
-                                            }
-                                            if(body.messages.at(-1)?.role !== 'assistant'){
-                                                body.messages.push({
-                                                    role: 'assistant',
-                                                    content: [{
-                                                        type: 'text',
-                                                        text: ''
-                                                    }]
-                                                })
-                                            }
-                                            let block = body.messages[body.messages.length-1].content
-                                            if(typeof block === 'string'){
-                                                body.messages[body.messages.length-1].content += text
-                                            }
-                                            else if(block[0].type === 'text'){
-                                                block[0].text += text
-                                            }
-                                            const res = await fetchNative(replacerURL, {
-                                                body: JSON.stringify(body),
-                                                headers: {
-                                                    "Content-Type": "application/json",
-                                                    "x-api-key": apiKey,
-                                                    "anthropic-version": "2023-06-01",
-                                                    "accept": "application/json",
-                                                },
-                                                method: "POST",
-                                                chatId: arg.chatId
-                                            })
-                                            if(res.status !== 200){
-                                                breakError = 'Error: ' + await textifyReadableStream(res.body)
-                                                break
-                                            }
-                                            reader = res.body.getReader()
-                                            rerequesting = false
-                                            break
-                                        }
-                                        text += "Error:" + JSON.parse(e.data).error?.message
-                                        if(arg.extractJson && (db.jsonSchemaEnabled || arg.schema)){
-                                            controller.enqueue({
-                                                "0": extractJSON(text, db.jsonSchema)
-                                            })
-                                        }
-                                        else{
-                                            controller.enqueue({
-                                                "0": text
-                                            })
-                                        }
-                                    }
-                                    break
+                                text += parsedData.delta?.text ?? ''
+                            }
+    
+                            if(parsedData?.delta?.type === 'thinking' || parsedData.delta?.type === 'thinking_delta'){
+                                if(!thinking){
+                                    text += "<Thoughts>\n"
+                                    thinking = true
                                 }
+                                text += parsedData.delta?.thinking ?? ''
+                            }
+    
+                            if(parsedData?.delta?.type === 'redacted_thinking'){
+                                if(!thinking){
+                                    text += "<Thoughts>\n"
+                                    thinking = true
+                                }
+                                text += '\n{{redacted_thinking}}\n'
                             }
                         }
-                    } catch (error) {}
+
+                        if(parsedData?.type === 'error'){
+                            const errormsg:string = parsedData?.error?.message
+                            if(errormsg && errormsg.toLocaleLowerCase().includes('overload') && db.antiServerOverloads){
+                                // console.log('Overload detected, retrying...')
+                                controller.enqueue({
+                                    "0": "Overload detected, retrying..."
+                                })
+
+                                return 'overload'
+                            }
+                            text += "Error:" + parsedData?.error?.message
+
+                        }
+                        
+                    }
+                    catch (error) {
+                    }
+
+                        
+                        
                 })
+                let breakWhile = false
+                let i = 0;
+                let prevText = ''
                 while(true){
-                    if(rerequesting){
-                        if(breakError){
-                            controller.enqueue({
-                                "0": breakError
-                            })
+                    try {
+                        if(arg?.abortSignal?.aborted || breakWhile){
                             break
                         }
-                        await sleep(1000)
-                        continue
-                    }
-                    try {
                         const {done, value} = await reader.read() 
                         if(done){
-                            if(rerequesting){
-                                continue
-                            }
                             break
                         }
-                        parser.feed(decoder.decode(value))                                   
+                        parserData += (decoder.decode(value))
+                        let parts = parserData.split('\n')
+                        for(;i<parts.length-1;i++){
+                            prevText = text
+                            if(parts?.[i]?.startsWith('data: ')){
+                                const d = await parseEvent(parts[i].slice(6))
+                                if(d === 'overload'){
+                                    parserData = ''
+                                    prevText = ''
+                                    text = ''
+                                    reader.cancel()
+                                    const res = await fetchNative(replacerURL, {
+                                        body: JSON.stringify(body),
+                                        headers: headers,
+                                        method: "POST",
+                                        chatId: arg.chatId
+                                    })
+                            
+                                    if(res.status !== 200){
+                                        controller.enqueue({
+                                            "0": await textifyReadableStream(res.body)
+                                        })
+                                        breakWhile = true
+                                        break
+                                    }
+
+                                    reader = res.body.getReader()
+                                    break
+                                }
+                            }
+                        }
+                        i--;
+                        text = prevText
+
+                        controller.enqueue({
+                            "0": text
+                        })
+
                     } catch (error) {
                         await sleep(1)
                     }
@@ -2867,15 +2952,19 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
     })
 
     if(!res.ok){
+        const stringlified = JSON.stringify(res.data)
         return {
             type: 'fail',
-            result: JSON.stringify(res.data)
+            result: stringlified,
+            failByServerError: stringlified?.toLocaleLowerCase()?.includes('overload')
         }
     }
     if(res.data.error){
+        const stringlified = JSON.stringify(res.data.error)
         return {
             type: 'fail',
-            result: JSON.stringify(res.data.error)
+            result: stringlified,
+            failByServerError: stringlified?.toLocaleLowerCase()?.includes('overload')
         }
     }
     const contents = res?.data?.content
@@ -2923,6 +3012,7 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
         result: resText
     }
 }
+
 
 async function requestHorde(arg:RequestDataArgumentExtended):Promise<requestDataResponse> {
     const formated = arg.formated
