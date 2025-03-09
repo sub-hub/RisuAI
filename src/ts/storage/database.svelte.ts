@@ -12,7 +12,7 @@ import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
-export let appVer = "150.4.1"
+export let appVer = "152.0.1"
 export let webAppSubVer = ''
 
 
@@ -490,6 +490,11 @@ export function setDatabase(data:Database){
         data.antiClaudeOverload = false
         data.antiServerOverloads = true
     }
+    data.hypaCustomSettings = {
+        url: data.hypaCustomSettings?.url ?? "",
+        key: data.hypaCustomSettings?.key ?? "",
+        model: data.hypaCustomSettings?.model ?? "",       
+    }
     changeLanguage(data.language)
     setDatabaseLite(data)
 }
@@ -903,7 +908,7 @@ export interface Database{
         preserveOrphanedMemory: boolean
         processRegexScript: boolean
         doNotSummarizeUserMessage: boolean
-    },
+    }
     OaiCompAPIKeys: {[key:string]:string}
     inlayErrorResponse:boolean
     reasoningEffort:number
@@ -914,6 +919,12 @@ export interface Database{
     useExperimentalGoogleTranslator:boolean
     thinkingTokens: number
     antiServerOverloads: boolean
+    hypaCustomSettings: {
+        url: string,
+        key: string,
+        model: string,       
+    },
+    localActivationInGlobalLorebook: boolean
 }
 
 interface SeparateParameters{
@@ -947,7 +958,7 @@ export interface loreBook{
     insertorder: number
     comment: string
     content: string
-    mode: 'multiple'|'constant'|'normal',
+    mode: 'multiple'|'constant'|'normal'|'child',
     alwaysActive: boolean
     selective:boolean
     extentions?:{
@@ -960,6 +971,7 @@ export interface loreBook{
     },
     useRegex?:boolean
     bookVersion?:number
+    id?:string
 }
 
 export interface character{
@@ -970,6 +982,7 @@ export interface character{
     desc:string
     notes:string
     chats:Chat[]
+    chatFolders: ChatFolder[]
     chatPage: number
     viewScreen: 'emotion'|'none'|'imggen'|'vn',
     bias: [string, number][]
@@ -1108,6 +1121,7 @@ export interface groupChat{
     image?:string
     firstMessage:string
     chats:Chat[]
+    chatFolders: ChatFolder[]
     chatPage: number
     name:string
     viewScreen: 'single'|'multiple'|'none'|'emp',
@@ -1315,6 +1329,14 @@ export interface Chat{
     bindedPersona?:string
     fmIndex?:number
     hypaV3Data?:SerializableHypaV3Data
+    folderId?:string
+}
+
+export interface ChatFolder{
+    id:string
+    name?:string
+    color?:string
+    folded:boolean
 }
 
 export interface Message{

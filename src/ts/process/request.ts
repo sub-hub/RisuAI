@@ -370,6 +370,7 @@ export interface OpenAIChatExtra {
     thoughts?:string[]
     prefix?:boolean
     reasoning_content?:string
+    cachePoint?:boolean
 }
 
 function reformater(formated:OpenAIChat[],modelInfo:LLMModel){
@@ -570,6 +571,7 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
             delete formatedChat[i].attr
             delete formatedChat[i].multimodals
             delete formatedChat[i].thoughts
+            delete formatedChat[i].cachePoint
         }
         if(aiModel === 'reverse_proxy' && db.reverseProxyOobaMode && formatedChat[i].role === 'system'){
             const cont = formatedChat[i].content
@@ -1120,10 +1122,10 @@ async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<requestDat
                 } catch (error) {}
             }
             else if(isNaN(parseFloat(value))){
-                body[key] = value
+                body = setObjectValue(body, key, value)
             }
             else{
-                body[key] = parseFloat(value)
+                body = setObjectValue(body, key, parseFloat(value))
             }
         }
     }
@@ -2497,7 +2499,8 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
 
     const addClaudeChat = (chat:{
         role: 'user'|'assistant'
-        content: string
+        content: string,
+        cache: boolean
     }, multimodals?:MultiModal[]) => {
         if(claudeChat.length > 0 && claudeChat[claudeChat.length-1].role === chat.role){
             let content = claudeChat[claudeChat.length-1].content
@@ -2540,6 +2543,11 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
                     }
                 }
             }
+            if(chat.cache){
+                content[content.length-1].cache_control = {
+                    type: 'ephemeral'
+                }
+            }
             claudeChat[claudeChat.length-1].content = content
         }
         else{
@@ -2573,6 +2581,11 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
                 }
 
             }
+            if(chat.cache){
+                formatedChat.content[0].cache_control = {
+                    type: 'ephemeral'
+                }
+            }
             claudeChat.push(formatedChat)
         }
     }
@@ -2581,14 +2594,16 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
             case 'user':{
                 addClaudeChat({
                     role: 'user',
-                    content: chat.content
+                    content: chat.content,
+                    cache: chat.cachePoint
                 }, chat.multimodals)
                 break
             }
             case 'assistant':{
                 addClaudeChat({
                     role: 'assistant',
-                    content: chat.content
+                    content: chat.content,
+                    cache: chat.cachePoint
                 }, chat.multimodals)
                 break
             }
@@ -2599,7 +2614,8 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
                 else{
                     addClaudeChat({
                         role: 'user',
-                        content: "System: " + chat.content
+                        content: "System: " + chat.content,
+                        cache: chat.cachePoint
                     })
                 }
                 break
@@ -2634,29 +2650,6 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
                 text: 'Start'
             }]
         })
-    }
-    if(db.claudeCachingExperimental){
-        for(let i = 0;i<4;i++){
-            const ind = claudeChat.findLastIndex((v) => {
-                if(v.role !== 'user'){
-                    return false
-                }
-                if(v.content.length === 0){
-                    return false
-                }
-                if(v.content[0].cache_control){ // if it already has cache control, skip
-                    return false
-                }
-                return true
-            })
-            console.log(ind)
-            if(ind === -1){
-                break
-            }
-            claudeChat[ind].content[0].cache_control = {
-                type: 'ephemeral'
-            }
-        }
     }
 
     let finalChat:Claude3ExtendedChat[] = claudeChat
@@ -2712,18 +2705,17 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
         const host = AMZ_HOST.replace("%REGION%", region);
         const stream = false;   // todo?
         
-        const awsModel = "us." + arg.modelInfo.internalID;
+        const awsModel = !arg.modelInfo.internalID.includes("claude-v2") ? "us." + arg.modelInfo.internalID : arg.modelInfo.internalID;
         const url = `https://${host}/model/${awsModel}/invoke${stream ? "-with-response-stream" : ""}`
 
-        const params = {
-            messages : claudeChat,
-            system: systemPrompt.trim(),
-            max_tokens: maxTokens,
-            // stop_sequences: null,
-            temperature: arg.temperature,
-            top_p: db.top_p,
-            top_k: db.top_k,
-            anthropic_version: "bedrock-2023-05-31",
+        let params = {...body}
+        params.anthropic_version = "bedrock-2023-05-31"
+        delete params.model
+        delete params.stream
+        if (params.thinking?.type === "enabled"){
+            params.temperature = 1.0
+            delete params.top_k
+            delete params.top_p
         }
 
         const rq = new HttpRequest({
@@ -2768,10 +2760,49 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
                 result: JSON.stringify(res.data.error)
             }
         }
+        const contents = res?.data?.content
+        if(!contents || contents.length === 0){
+            return {
+                type: 'fail',
+                result: JSON.stringify(res.data)
+            }
+        }
+        let resText = ''
+        let thinking = false
+        for(const content of contents){
+            if(content.type === 'text'){
+                if(thinking){
+                    resText += "</Thoughts>\n\n"
+                    thinking = false
+                }
+                resText += content.text
+            }
+            if(content.type === 'thinking'){
+                if(!thinking){
+                    resText += "<Thoughts>\n"
+                    thinking = true
+                }
+                resText += content.thinking ?? ''
+            }
+            if(content.type === 'redacted_thinking'){
+                if(!thinking){
+                    resText += "<Thoughts>\n"
+                    thinking = true
+                }
+                resText += '\n{{redacted_thinking}}\n'
+            }
+        }
+    
+    
+        if(arg.extractJson && db.jsonSchemaEnabled){
+            return {
+                type: 'success',
+                result: extractJSON(resText, db.jsonSchema)
+            }
+        }
         return {
             type: 'success',
-            result: res.data.content[0].text
-        
+            result: resText
         }
     }
 
@@ -2786,10 +2817,6 @@ async function requestClaude(arg:RequestDataArgumentExtended):Promise<requestDat
     }
 
     let betas:string[] = []
-
-    if(db.claudeCachingExperimental){
-        betas.push('prompt-caching-2024-07-31')
-    }
 
     if(body.max_tokens > 8192){
         betas.push('output-128k-2025-02-19')
