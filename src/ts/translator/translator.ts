@@ -184,7 +184,8 @@ async function translateMain(text:string, arg:{from:string, to:string, host:stri
                     if(data.translateResponse){
                          return data.translateResponse.translateText
                     } else {
-                       return 'ERR::Experimental Google API Error: Invalid response format'
+                        console.log("번역오류 ",text)
+                       return text
                     }
                 }else{
                     return 'ERR::Experimental Google API Error' + (await f.data)
