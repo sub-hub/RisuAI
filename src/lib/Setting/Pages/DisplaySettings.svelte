@@ -247,6 +247,10 @@
     </div>
 
     <div class="flex items-center mt-2">
+        <Check bind:check={DBState.db.showFolderName} name={language.showFolderNameInIcon}/>
+    </div>
+
+    <div class="flex items-center mt-2">
         <Check check={DBState.db.customBackground !== ''} onChange={async (check) => {
             if(check){
                 DBState.db.customBackground = '-'
@@ -267,6 +271,10 @@
     <div class="flex items-center mt-2">
         <Check bind:check={DBState.db.playMessage} name={language.playMessage}/>
         <span> <Help key="msgSound" name={language.playMessage}/></span>
+    </div>
+
+    <div class="flex items-center mt-2">
+        <Check bind:check={DBState.db.playMessageOnTranslateEnd } name={language.playMessageOnTranslateEnd}/>
     </div>
 
     <div class="flex items-center mt-2">

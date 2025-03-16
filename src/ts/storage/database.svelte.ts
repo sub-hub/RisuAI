@@ -12,7 +12,7 @@ import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
-export let appVer = "152.0.1"
+export let appVer = "154.0.0"
 export let webAppSubVer = ''
 
 
@@ -925,6 +925,13 @@ export interface Database{
         model: string,       
     },
     localActivationInGlobalLorebook: boolean
+    showFolderName: boolean
+    automaticCachePoint: boolean
+    chatCompression: boolean
+    claudeRetrivalCaching: boolean
+    outputImageModal: boolean
+    playMessageOnTranslateEnd:boolean
+
 }
 
 interface SeparateParameters{
@@ -938,7 +945,10 @@ interface SeparateParameters{
     presence_penalty?:number
     reasoning_effort?:number
     thinking_tokens?:number
+    outputImageModal?:boolean
 }
+
+type OutputModal = 'image'|'audio'|'video'
 
 export interface customscript{
     comment: string;
@@ -1255,6 +1265,7 @@ export interface botPreset{
     regex?:customscript[]
     reasonEffort?:number
     thinkingTokens?:number
+    outputImageModal?:boolean
 }
 
 
@@ -1330,6 +1341,7 @@ export interface Chat{
     fmIndex?:number
     hypaV3Data?:SerializableHypaV3Data
     folderId?:string
+    lastDate?:number
 }
 
 export interface ChatFolder{
@@ -1570,6 +1582,7 @@ export function saveCurrentPreset(){
         image: pres?.[db.botPresetsId]?.image ?? '',
         reasonEffort: db.reasoningEffort ?? 0,
         thinkingTokens: db.thinkingTokens ?? null,
+        outputImageModal: db.outputImageModal ?? false
     }
     db.botPresets = pres
     setDatabase(db)
@@ -1681,6 +1694,7 @@ export function setPreset(db:Database, newPres: botPreset){
     db.presetRegex = newPres.regex ?? []
     db.reasoningEffort = newPres.reasonEffort ?? 0
     db.thinkingTokens = newPres.thinkingTokens ?? null
+    db.outputImageModal = newPres.outputImageModal ?? false
     return db
 }
 
