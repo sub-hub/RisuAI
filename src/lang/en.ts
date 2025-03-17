@@ -702,6 +702,7 @@ export const languageEnglish = {
     showMenuChatList: "Show Menu Chat List",
     translatorLanguage: "Translator Language",
     translatorType: "Translator Type",
+    htmlTranslation: "HTML Translate",
     deeplKey: "deepL API Key",
     deeplFreeKey: "deepL Free API Key",
     deeplXUrl: "deepLX URL",
@@ -1074,4 +1075,7 @@ export const languageEnglish = {
     loadingChatData: "Loading Chat Data",
     outputImageModal: "Output Image Modal",
     playMessageOnTranslateEnd: "Play Audio on Translate Completion",
+    seperateModelsForAxModels: "Seperate Models for Auxiliary Models",
+    axModelsDef: "Ax Models Definition",
+    doNotChangeSeperateModels: "Do Not Change Seperate Models",
 }
