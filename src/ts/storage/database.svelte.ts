@@ -12,7 +12,7 @@ import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
 
-export let appVer = "155.0.0"
+export let appVer = "156.0.0"
 export let webAppSubVer = ''
 
 
@@ -497,6 +497,8 @@ export function setDatabase(data:Database){
         model: data.hypaCustomSettings?.model ?? "",       
     }
     data.doNotChangeSeperateModels ??= false
+    data.modelTools ??= []
+    data.hotkeys ??= structuredClone(defaultHotkeys)
     changeLanguage(data.language)
     setDatabaseLite(data)
 }
@@ -942,6 +944,8 @@ export interface Database{
         otherAx: string
     }
     doNotChangeSeperateModels:boolean
+    modelTools: string[]
+    hotkeys:Hotkey[]
 }
 
 interface SeparateParameters{
@@ -1284,6 +1288,7 @@ export interface botPreset{
         translate: string
         otherAx: string
     }
+    modelTools?:string[]
 }
 
 
@@ -1603,6 +1608,7 @@ export function saveCurrentPreset(){
         outputImageModal: db.outputImageModal ?? false,
         seperateModelsForAxModels: db.doNotChangeSeperateModels ? false : db.seperateModelsForAxModels ?? false,
         seperateModels: db.doNotChangeSeperateModels ? null : safeStructuredClone(db.seperateModels),
+        modelTools: safeStructuredClone(db.modelTools),
     }
     db.botPresets = pres
     setDatabase(db)
@@ -1724,6 +1730,7 @@ export function setPreset(db:Database, newPres: botPreset){
             otherAx: ''
         }
     }
+    db.modelTools = safeStructuredClone(newPres.modelTools ?? [])
 
     return db
 }
@@ -1739,6 +1746,7 @@ import { LLMFlags, LLMFormat } from '../model/modellist';
 import type { Parameter } from '../process/request';
 import type { HypaModel } from '../process/memory/hypamemory';
 import type { SerializableHypaV3Data } from '../process/memory/hypav3';
+import { defaultHotkeys, type Hotkey } from '../defaulthotkeys';
 
 export async function downloadPreset(id:number, type:'json'|'risupreset'|'return' = 'json'){
     saveCurrentPreset()
