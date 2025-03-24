@@ -9,17 +9,175 @@ import { doingChat, previewBody, sendChat } from "./process/index.svelte"
 import { getRequestLog } from "./globalApi.svelte"
 
 export function initHotkey(){
-    document.addEventListener('keydown', (ev) => {
-        if(ev.shiftKey){
-            console.log(ev.key)
-            switch(ev.key){
-                case 'E':{
-                    ev.preventDefault()
+    document.addEventListener('keydown', async (ev) => {
+        if(
+            !ev.ctrlKey &&
+            !ev.altKey &&
+            !ev.shiftKey &&
+            ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)
+        ){
+            return
+        }
+
+
+        const database = getDatabase()
+
+        const hotKeys = database?.hotkeys ?? defaultHotkeys
+
+        let hotkeyRan = false
+        for(const hotkey of hotKeys){
+            let hotKeyRanThisTime = true
+            
+            
+            hotkey.ctrl = hotkey.ctrl ?? false
+            hotkey.alt = hotkey.alt ?? false
+            hotkey.shift = hotkey.shift ?? false
+
+            if(hotkey.key === ev.key){
+             
+                console.log(`Hotkey: "${hotkey.key}" ${hotkey.ctrl} ${hotkey.alt} ${hotkey.shift}`)
+                console.log(`Event: "${ev.key}" ${ev.ctrlKey} ${ev.altKey} ${ev.shiftKey}`)
+                
+            }
+            if(hotkey.ctrl !== ev.ctrlKey){
+                continue
+            }
+            if(hotkey.alt !== ev.altKey){
+                continue
+            }
+            if(hotkey.shift !== ev.shiftKey){
+                continue
+            }
+            if(hotkey.key !== ev.key){
+                continue
+            }
+            if(!hotkey.ctrl && !hotkey.alt && !hotkey.shift){
+                if(['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)){
+                    continue
+                }
+            }
+            switch(hotkey.action){
+                case 'reroll':{
+                    clickQuery('.button-icon-reroll')
+                    break
+                }
+                case 'unreroll':{
+                    clickQuery('.button-icon-unreroll')
+                    break
+                }
+                case 'translate':{
+                    clickQuery('.button-icon-translate')
+                    break
+                }
+                case 'remove':{
+                    clickQuery('.button-icon-remove')
+                    break
+                }
+                case 'edit':{
                     clickQuery('.button-icon-edit')
                     setTimeout(() => {
                         focusQuery('.message-edit-area')
                     }, 100)
+                    break
+                }
+                case 'copy':{
+                    clickQuery('.button-icon-copy')
+                    break
+                }
+                case 'focusInput':{
+                    focusQuery('.text-input-area')
+                    break
+                }
+                case 'send':{
+                    clickQuery('.button-icon-send')
+                    break
+                }
+                case 'settings':{
+                    settingsOpen.set(!get(settingsOpen))
+                    break
+                }
+                case 'home':{
+                    selectedCharID.set(-1)
+                    break
+                }
+                case 'presets':{
+                    openPresetList.set(!get(openPresetList))
+                    break
+                }
+                case 'persona':{
+                    openPersonaList.set(!get(openPersonaList))
+                    break
+                }
+                case 'toggleCSS':{
+                    SafeModeStore.set(!get(SafeModeStore))
+                    updateTextThemeAndCSS()
+                    break
+                }
+                case 'prevChar':{
+                    const sorted = database.characters.map((v, i) => {
+                        return {name: v.name, i}
+                    }).sort((a, b) => a.name.localeCompare(b.name))
+                    const currentIndex = sorted.findIndex(v => v.i === get(selectedCharID))
+                    if(currentIndex === 0){
+                        return
+                    }
+                    if(currentIndex >= sorted.length - 1){
+                        return
+                    }
+                    selectedCharID.set(sorted[currentIndex - 1].i)
+                    PlaygroundStore.set(0)
+                    OpenRealmStore.set(false)
+                    break
+                }
+                case 'nextChar':{
+                    const sorted = database.characters.map((v, i) => {
+                        return {name: v.name, i}
+                    }).sort((a, b) => a.name.localeCompare(b.name))
+                    const currentIndex = sorted.findIndex(v => v.i === get(selectedCharID))
+                    if(currentIndex === 0){
+                        return
+                    }
+                    if(currentIndex >= sorted.length - 1){
+                        return
+                    }
+                    selectedCharID.set(sorted[currentIndex + 1].i)
+                    PlaygroundStore.set(0)
+                    OpenRealmStore.set(false)
+                    break
+                }
+                case 'quickMenu':{
+                    quickMenu()
+                    break
+                }
+                case 'previewRequest':{
+                    if(get(doingChat) && get(selectedCharID) !== -1){
+                        return false
+                    }
+                    alertWait("Loading...")
+                    ev.preventDefault()
+                    ev.stopPropagation()
+                    await sendChat(-1, {
+                        previewPrompt: true
+                    })
+
+                    let md = ''
+                    md += '### Prompt\n'
+                    md += '```json\n' + JSON.stringify(JSON.parse(previewBody), null, 2).replaceAll('```', '\\`\\`\\`') + '\n```\n'
+                    doingChat.set(false)
+                    alertMd(md)
                     return
+                }
+                case 'toggleLog':{
+                    alertMd(getRequestLog())
+                    break
+                }
+                case 'quickSettings':{
+                    QuickSettings.open = !QuickSettings.open
+                    QuickSettings.index = 0
+                    break
+                }
+                default:{
+                    hotKeyRanThisTime = false
                 }
             }
         }
