@@ -45,12 +45,21 @@ DOMPurify.addHook("uponSanitizeElement", (node: HTMLElement, data) => {
           return node.parentNode.removeChild(node);
        }
     }
+    if(data.tagName === 'img'){
+        const loading = node.getAttribute("loading")
+        if(!loading){
+            node.setAttribute("loading","lazy")
+        }
+        const decoding = node.getAttribute("decoding")
+        if(!decoding){
+            node.setAttribute("decoding", "async")
+        }
+    }
 });
 
 DOMPurify.addHook("uponSanitizeAttribute", (node, data) => {
     switch(data.attrName){
         case 'style':{
-            data.attrValue = data.attrValue.replace(/(absolute)|(z-index)|(fixed)/g, '')
             break
         }
         case 'class':{
@@ -302,13 +311,17 @@ async function replaceAsync(string, regexp, replacerFunction) {
     return string.replace(regexp, () => replacements[i++])
 }
 
-async function getAssetSrc(assetArr: string[][], name: string, assetPaths: {[key: string]:{path: string, ext?: string}}) {
+async function getAssetSrc(assetArr: string[][], name: string, assetPaths: {[key: string]:{path: string[], ext?: string}}) {
     for (const asset of assetArr) {
         if (trimmer(asset[0].toLocaleLowerCase()) !== trimmer(name)) continue
         const assetPath = await getFileSrc(asset[1])
-        assetPaths[asset[0].toLocaleLowerCase()] = {
-            path: assetPath,
+        const key = asset[0].toLocaleLowerCase()
+        assetPaths[key] = {
+            path: [],
             ext: asset[2]
+        }
+        if(assetPaths[key].ext === asset[2]){
+            assetPaths[key].path.push(assetPath)
         }
         return
     }
@@ -323,11 +336,11 @@ async function getEmoSrc(emoArr: string[][], emoPaths: {[key: string]:{path: str
     }
 }
 
-async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|character, mode:'normal'|'back', mode2:'unset'|'pre'|'post' = 'unset'){
+async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|character, mode:'normal'|'back', arg:{ch:number}){
     const assetWidthString = (DBState.db.assetWidth && DBState.db.assetWidth !== -1 || DBState.db.assetWidth === 0) ? `max-width:${DBState.db.assetWidth}rem;` : ''
 
     let assetPaths:{[key:string]:{
-        path:string
+        path:string[]
         ext?:string
     }} = {}
     let emoPaths:{[key:string]:{
@@ -385,33 +398,39 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
                 return ''
             }
         }
+
+        let p = path.path[0]
+
+        if(path.path.length > 1){
+            p = path.path[Math.floor(arg.ch % p.length)]
+        }
         switch(type){
             case 'raw':
             case 'path':
-                return path.path
+                return p
             case 'img':
-                return `<img src="${path.path}" alt="${path.path}" style="${assetWidthString} "/>`
+                return `<img src="${p}" alt="${p}" style="${assetWidthString} "/>`
             case 'image':
-                return `<div class="risu-inlay-image"><img src="${path.path}" alt="${path.path}" style="${assetWidthString}"/></div>\n`
+                return `<div class="risu-inlay-image"><img src="${p}" alt="${p}" style="${assetWidthString}"/></div>\n`
             case 'video':
-                return `<video controls autoplay loop><source src="${path.path}" type="video/mp4"></video>\n`
+                return `<video controls autoplay loop><source src="${p}" type="video/mp4"></video>\n`
             case 'video-img':
-                return `<video autoplay muted loop><source src="${path.path}" type="video/mp4"></video>\n`
+                return `<video autoplay muted loop><source src="${p}" type="video/mp4"></video>\n`
             case 'audio':
-                return `<audio controls autoplay loop><source src="${path.path}" type="audio/mpeg"></audio>\n`
+                return `<audio controls autoplay loop><source src="${p}" type="audio/mpeg"></audio>\n`
             case 'bg':
                 if(mode === 'back'){
-                    return `<div style="width:100%;height:100%;background: linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)),url(${path.path}); background-size: cover;"></div>`
+                    return `<div style="width:100%;height:100%;background: linear-gradient(rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.8)),url(${p}); background-size: cover;"></div>`
                 }
                 break
             case 'asset':{
                 if(path.ext && videoExtention.includes(path.ext)){
-                    return `<video autoplay muted loop><source src="${path.path}" type="video/mp4"></video>\n`
+                    return `<video autoplay muted loop><source src="${p}" type="video/mp4"></video>\n`
                 }
-                return `<img src="${path.path}" alt="${path.path}" style="${assetWidthString} "/>\n`
+                return `<img src="${p}" alt="${p}" style="${assetWidthString} "/>\n`
             }
             case 'bgm':
-                return `<div risu-ctrl="bgm___auto___${path.path}" style="display:none;"></div>\n`
+                return `<div risu-ctrl="bgm___auto___${p}" style="display:none;"></div>\n`
         }
         return ''
     })
@@ -431,7 +450,7 @@ async function parseAdditionalAssets(data:string, char:simpleCharacterArgument|c
     return data
 }
 
-async function getClosestMatch(char: simpleCharacterArgument|character, name:string, assetPaths:{[key:string]:{path:string, ext?:string}}){   
+async function getClosestMatch(char: simpleCharacterArgument|character, name:string, assetPaths:{[key:string]:{path:string[], ext?:string}}){   
     if(!char.additionalAssets) return null
 
     let closest = ''
@@ -457,7 +476,7 @@ async function getClosestMatch(char: simpleCharacterArgument|character, name:str
 
     const assetPath = await getFileSrc(targetPath)
     assetPaths[closest] = {
-        path: assetPath,
+        path: [assetPath],
         ext: targetExt
     }
 
@@ -551,7 +570,9 @@ export async function ParseMarkdown(
     let char = (typeof(charArg) === 'string') ? (findCharacterbyId(charArg)) : (charArg)
 
     if(char && char.type !== 'group'){
-        data = await parseAdditionalAssets(data, char, additionalAssetMode, 'pre')
+        data = await parseAdditionalAssets(data, char, additionalAssetMode, {
+            ch: chatID
+        })
         firstParsed = data
     }
 
@@ -560,7 +581,9 @@ export async function ParseMarkdown(
     }
 
     if(firstParsed !== data && char && char.type !== 'group'){
-        data = await parseAdditionalAssets(data, char, additionalAssetMode, 'post')
+        data = await parseAdditionalAssets(data, char, additionalAssetMode, {
+            ch: chatID
+        })
     }
 
     data = await parseInlayAssets(data ?? '')
@@ -629,6 +652,11 @@ function decodeStyleRule(rule:CssAtRuleAST){
         for(let i=0;i<rule.rules.length;i++){
             rule.rules[i] = decodeStyleRule(rule.rules[i])
         }
+    }
+    if(rule.type === 'import'){
+       if(rule.import.startsWith('data:')){
+            rule.import = 'data:,'
+       }
     }
     return rule
 }
@@ -1281,7 +1309,7 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                 }
                 case 'getglobalvar':{
                     return getGlobalChatVar(v)
-                }
+                } // setglobalvar cbs support?
                 case 'button':{
                     return `<button class="button-default" risu-trigger="${arra[2]}">${arra[1]}</button>`
                 }
@@ -1382,7 +1410,7 @@ function basicMatcher (p1:string,matcherArg:matcherArg,vars:{[key:string]:string
                 case 'previous_chat_log':{
                     const selchar = db.characters[get(selectedCharID)]
                     const chat = selchar?.chats?.[selchar.chatPage]
-                    return chat?.message[chatID - 1]?.data ?? 'Out of range'
+                    return chat?.message[Number(arra[1])]?.data ?? 'Out of range'
     
                 }
                 case 'tonumber':{
@@ -2236,6 +2264,10 @@ export function getChatVar(key:string){
 
 export function getGlobalChatVar(key:string){
     return DBState.db.globalChatVariables[key] ?? 'null'
+}
+
+export function setGlobalChatVar(key:string, value:string){ 
+    DBState.db.globalChatVariables[key] = value // String to String Map(dictionary)
 }
 
 export function setChatVar(key:string, value:string){

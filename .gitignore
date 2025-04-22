@@ -13,6 +13,7 @@ save/
 dist-web/
 dist-ssr
 *.local
+test/test.ts
 xplugin/
 src-others/
 /memo.txt
@@ -43,3 +44,4 @@ __pycache__/
 dist.zip
 /scripts/
 .env
+/server/node/ssl/certificate
