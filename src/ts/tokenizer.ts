@@ -9,14 +9,11 @@ import { globalFetch } from "./globalApi.svelte";
 import { getModelInfo, LLMTokenizer, type LLMModel } from "./model/modellist";
 import { pluginV2 } from "./plugins/plugins";
 import type { GemmaTokenizer } from "@huggingface/transformers";
-import { LRUCache } from 'lru-cache';
-import md5 from 'blueimp-md5';
+import { LRUMap } from 'mnemonist';
 
-const MAX_CACHE_SIZE = 5000;
+const MAX_CACHE_SIZE = 1500;
 
-const encodeCache = new LRUCache<string, number[] | Uint32Array | Int32Array>({
-    max: MAX_CACHE_SIZE,
-});
+const encodeCache = new LRUMap<string, number[] | Uint32Array | Int32Array>(MAX_CACHE_SIZE);
 
 function getHash(
     data: string,
@@ -28,7 +25,7 @@ function getHash(
     pluginTokenizer: string
 ): string {
     const combined = `${data}::${aiModel}::${customTokenizer}::${currentPluginProvider}::${googleClaudeTokenizing ? '1' : '0'}::${modelInfo.tokenizer}::${pluginTokenizer}`;
-    return md5(combined);
+    return combined;
 }
 
 
@@ -50,18 +47,21 @@ export async function encode(data:string):Promise<(number[]|Uint32Array|Int32Arr
     const modelInfo = getModelInfo(db.aiModel);
     const pluginTokenizer = pluginV2.providerOptions.get(db.currentPluginProvider)?.tokenizer ?? "none";
 
-    const cacheKey = getHash(
-        data,
-        db.aiModel,
-        db.customTokenizer,
-        db.currentPluginProvider,
-        db.googleClaudeTokenizing,
-        modelInfo,
-        pluginTokenizer
-    );
-    const cachedResult = encodeCache.get(cacheKey);
-    if (cachedResult !== undefined) {
-        return cachedResult;
+    let cacheKey = ''
+    if(db.useTokenizerCaching){
+        cacheKey = getHash(
+            data,
+            db.aiModel,
+            db.customTokenizer,
+            db.currentPluginProvider,
+            db.googleClaudeTokenizing,
+            modelInfo,
+            pluginTokenizer
+        );
+        const cachedResult = encodeCache.get(cacheKey);
+        if (cachedResult !== undefined) {
+            return cachedResult;
+        }
     }
 
     let result: number[] | Uint32Array | Int32Array;
@@ -89,9 +89,7 @@ export async function encode(data:string):Promise<(number[]|Uint32Array|Int32Arr
             default:
                 result = await tikJS(data, 'o200k_base'); break;
         }
-    }
-    
-    if(db.aiModel === 'custom' && pluginTokenizer){
+    } else if (db.aiModel === 'custom' && pluginTokenizer) {
         switch(pluginTokenizer){
             case 'mistral':
                 result = await tokenizeWebTokenizers(data, 'mistral'); break;
@@ -120,32 +118,37 @@ export async function encode(data:string):Promise<(number[]|Uint32Array|Int32Arr
         }
     } 
     
-    if(modelInfo.tokenizer === LLMTokenizer.NovelList){
-        result = await tokenizeWebTokenizers(data, 'novellist');
-    } else if(modelInfo.tokenizer === LLMTokenizer.Claude){
-        result = await tokenizeWebTokenizers(data, 'claude');
-    } else if(modelInfo.tokenizer === LLMTokenizer.NovelAI){
-        result = await tokenizeWebTokenizers(data, 'novelai');
-    } else if(modelInfo.tokenizer === LLMTokenizer.Mistral){
-        result = await tokenizeWebTokenizers(data, 'mistral');
-    } else if(modelInfo.tokenizer === LLMTokenizer.Llama){
-        result = await tokenizeWebTokenizers(data, 'llama');
-    } else if(modelInfo.tokenizer === LLMTokenizer.Local){
-        result = await tokenizeGGUFModel(data);
-    } else if(modelInfo.tokenizer === LLMTokenizer.tiktokenO200Base){
-        result = await tikJS(data, 'o200k_base');
-    } else if(modelInfo.tokenizer === LLMTokenizer.GoogleCloud && db.googleClaudeTokenizing){
-        result = await tokenizeGoogleCloud(data);
-    } else if(modelInfo.tokenizer === LLMTokenizer.Gemma || modelInfo.tokenizer === LLMTokenizer.GoogleCloud){
-        result = await gemmaTokenize(data);
-    } else if(modelInfo.tokenizer === LLMTokenizer.DeepSeek){
-        result = await tokenizeWebTokenizers(data, 'DeepSeek');
-    } else if(modelInfo.tokenizer === LLMTokenizer.Cohere){
-        result = await tokenizeWebTokenizers(data, 'cohere');
-    } else {
-        result = await tikJS(data);
+    // Fallback
+    if (result === undefined) {
+        if(modelInfo.tokenizer === LLMTokenizer.NovelList){
+            result = await tokenizeWebTokenizers(data, 'novellist');
+        } else if(modelInfo.tokenizer === LLMTokenizer.Claude){
+            result = await tokenizeWebTokenizers(data, 'claude');
+        } else if(modelInfo.tokenizer === LLMTokenizer.NovelAI){
+            result = await tokenizeWebTokenizers(data, 'novelai');
+        } else if(modelInfo.tokenizer === LLMTokenizer.Mistral){
+            result = await tokenizeWebTokenizers(data, 'mistral');
+        } else if(modelInfo.tokenizer === LLMTokenizer.Llama){
+            result = await tokenizeWebTokenizers(data, 'llama');
+        } else if(modelInfo.tokenizer === LLMTokenizer.Local){
+            result = await tokenizeGGUFModel(data);
+        } else if(modelInfo.tokenizer === LLMTokenizer.tiktokenO200Base){
+            result = await tikJS(data, 'o200k_base');
+        } else if(modelInfo.tokenizer === LLMTokenizer.GoogleCloud && db.googleClaudeTokenizing){
+            result = await tokenizeGoogleCloud(data);
+        } else if(modelInfo.tokenizer === LLMTokenizer.Gemma || modelInfo.tokenizer === LLMTokenizer.GoogleCloud){
+            result = await gemmaTokenize(data);
+        } else if(modelInfo.tokenizer === LLMTokenizer.DeepSeek){
+            result = await tokenizeWebTokenizers(data, 'DeepSeek');
+        } else if(modelInfo.tokenizer === LLMTokenizer.Cohere){
+            result = await tokenizeWebTokenizers(data, 'cohere');
+        } else {
+            result = await tikJS(data);
+        }
     }
-    encodeCache.set(cacheKey, result);
+    if(db.useTokenizerCaching){
+        encodeCache.set(cacheKey, result);
+    }
 
     return result;
 }
@@ -206,6 +209,7 @@ async function gemmaTokenize(text:string) {
 
 async function tikJS(text:string, model='cl100k_base') {
     if(!tikParser || lastTikModel !== model){
+        tikParser?.free()
         if(model === 'cl100k_base'){
             const {Tiktoken} = await import('@dqbd/tiktoken')
             const cl100k_base = await import("@dqbd/tiktoken/encoders/cl100k_base.json");
@@ -247,6 +251,7 @@ async function geminiTokenizer(text:string) {
     })
 
     if(!fetchResult.ok){
+        //fallback to tiktoken
         return await tikJS(text)
     }
 
