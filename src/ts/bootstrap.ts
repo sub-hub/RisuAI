@@ -15,12 +15,12 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { checkRisuUpdate } from "./update";
 import { MobileGUI, botMakerMode, selectedCharID, loadedStore, DBState, LoadingStatusState } from "./stores.svelte";
 import { loadPlugins } from "./plugins/plugins";
-import { alertError, alertMd, alertTOS, waitAlert } from "./alert";
+import { alertError, alertMd, alertTOS, waitAlert, alertSelect, alertConfirm, alertWait, alertClear } from "./alert";
 import { checkDriverInit } from "./drive/drive";
 import { characterURLImport } from "./characterCards";
 import { defaultJailbreak, defaultMainPrompt, oldJailbreak, oldMainPrompt } from "./storage/defaultPrompts";
 import { loadRisuAccountData } from "./drive/accounter";
-import { decodeRisuSave, encodeRisuSaveLegacy } from "./storage/risuSave";
+import { decodeRisuSave, encodeRisuSaveLegacy, tryRecoverRisuSave, type RecoveryResult } from "./storage/risuSave";
 import { updateAnimationSpeed } from "./gui/animation";
 import { updateColorScheme, updateTextThemeAndCSS } from "./gui/colorscheme";
 import { autoServerBackup } from "./kei/backup";
@@ -40,7 +40,9 @@ import {
     getUnpargeables,
     getBasename,
     setUsingSw,
-    checkCharOrder
+    checkCharOrder,
+    downloadFile,
+    VirtualWriter
 } from "./globalApi.svelte";
 import { isTauri } from "./platform";
 
@@ -68,34 +70,45 @@ export async function loadData() {
                 if (!await exists('database/database.bin', { baseDir: BaseDirectory.AppData })) {
                     await writeFile('database/database.bin', encodeRisuSaveLegacy({}), { baseDir: BaseDirectory.AppData });
                 }
+                let tauriDbLoaded = false
+                let tauriCorruptedData: Uint8Array | null = null
                 try {
                     LoadingStatusState.text = "Reading Save File..."
                     const readed = await readFile('database/database.bin', { baseDir: BaseDirectory.AppData })
+                    tauriCorruptedData = readed // Keep a copy in case decoding fails
                     LoadingStatusState.text = "Cleaning Unnecessary Files..."
                     getDbBackups() //this also cleans the backups
                     LoadingStatusState.text = "Decoding Save File..."
                     const decoded = await decodeRisuSave(readed)
                     setDatabase(decoded)
+                    tauriDbLoaded = true
                 } catch (error) {
                     LoadingStatusState.text = "Reading Backup Files..."
                     const backups = await getDbBackups()
-                    let backupLoaded = false
                     for (const backup of backups) {
-                        if (!backupLoaded) {
+                        if (!tauriDbLoaded) {
                             try {
                                 LoadingStatusState.text = `Reading Backup File ${backup}...`
                                 const backupData = await readFile(`database/dbbackup-${backup}.bin`, { baseDir: BaseDirectory.AppData })
                                 setDatabase(
                                     await decodeRisuSave(backupData)
                                 )
-                                backupLoaded = true
+                                tauriDbLoaded = true
                             } catch (error) {
                                 console.error(error)
                             }
                         }
                     }
-                    if (!backupLoaded) {
-                        throw "Your save file is corrupted"
+                    if (!tauriDbLoaded && tauriCorruptedData) {
+                        // Offer recovery options to user
+                        const recovered = await handleCorruptedSaveFile(tauriCorruptedData, 'Tauri database.bin')
+                        if (!recovered) {
+                            // User chose not to continue or recovery failed completely
+                            return
+                        }
+                        tauriDbLoaded = true
+                    } else if (!tauriDbLoaded) {
+                        throw "Your save file is corrupted and no data is available for recovery"
                     }
                 }
                 LoadingStatusState.text = "Checking Update..."
@@ -108,64 +121,84 @@ export async function loadData() {
 
                 LoadingStatusState.text = "Loading Local Save File..."
                 let gotStorage: Uint8Array = await forageStorage.getItem('database/database.bin') as unknown as Uint8Array
+                let forageCorruptedData: Uint8Array | null = null
                 LoadingStatusState.text = "Decoding Local Save File..."
                 if (checkNullish(gotStorage)) {
                     gotStorage = encodeRisuSaveLegacy({})
                     await forageStorage.setItem('database/database.bin', gotStorage)
                 }
+                let forageDbLoaded = false
+                forageCorruptedData = gotStorage // Keep a copy in case decoding fails
                 try {
                     const decoded = await decodeRisuSave(gotStorage)
                     console.log(decoded)
                     setDatabase(decoded)
+                    forageDbLoaded = true
                 } catch (error) {
                     console.error(error)
                     const backups = await getDbBackups()
-                    let backupLoaded = false
                     for (const backup of backups) {
-                        try {
-                            LoadingStatusState.text = `Reading Backup File ${backup}...`
-                            const backupData: Uint8Array = await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
-                            setDatabase(
-                                await decodeRisuSave(backupData)
-                            )
-                            backupLoaded = true
-                        } catch (error) { }
-                    }
-                    if (!backupLoaded) {
-                        throw "Forage: Your save file is corrupted"
-                    }
-                }
-
-                if (await forageStorage.checkAccountSync()) {
-                    LoadingStatusState.text = "Checking Account Sync..."
-                    let gotStorage: Uint8Array = await (forageStorage.realStorage as AccountStorage).getItem('database/database.bin', (v) => {
-                        LoadingStatusState.text = `Loading Remote Save File ${(v * 100).toFixed(2)}%`
-                    })
-                    if (checkNullish(gotStorage)) {
-                        gotStorage = encodeRisuSaveLegacy({})
-                        await forageStorage.setItem('database/database.bin', gotStorage)
-                    }
-                    try {
-                        setDatabase(
-                            await decodeRisuSave(gotStorage)
-                        )
-                    } catch (error) {
-                        const backups = await getDbBackups()
-                        let backupLoaded = false
-                        for (const backup of backups) {
+                        if (!forageDbLoaded) {
                             try {
                                 LoadingStatusState.text = `Reading Backup File ${backup}...`
                                 const backupData: Uint8Array = await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
                                 setDatabase(
                                     await decodeRisuSave(backupData)
                                 )
-                                backupLoaded = true
+                                forageDbLoaded = true
                             } catch (error) { }
                         }
-                        if (!backupLoaded) {
-                            // throw "Your save file is corrupted"
-                            await autoServerBackup()
-                            await sleep(10000)
+                    }
+                    if (!forageDbLoaded && forageCorruptedData) {
+                        // Offer recovery options to user
+                        const recovered = await handleCorruptedSaveFile(forageCorruptedData, 'Local Storage')
+                        if (!recovered) {
+                            // User chose not to continue or recovery failed completely
+                            return
+                        }
+                        forageDbLoaded = true
+                    } else if (!forageDbLoaded) {
+                        throw "Forage: Your save file is corrupted and no data is available for recovery"
+                    }
+                }
+
+                if (await forageStorage.checkAccountSync()) {
+                    LoadingStatusState.text = "Checking Account Sync..."
+                    let remoteSaveData: Uint8Array = await (forageStorage.realStorage as AccountStorage).getItem('database/database.bin', (v) => {
+                        LoadingStatusState.text = `Loading Remote Save File ${(v * 100).toFixed(2)}%`
+                    })
+                    if (checkNullish(remoteSaveData)) {
+                        remoteSaveData = encodeRisuSaveLegacy({})
+                        await forageStorage.setItem('database/database.bin', remoteSaveData)
+                    }
+                    let remoteSaveLoaded = false
+                    try {
+                        setDatabase(
+                            await decodeRisuSave(remoteSaveData)
+                        )
+                        remoteSaveLoaded = true
+                    } catch (error) {
+                        const backups = await getDbBackups()
+                        for (const backup of backups) {
+                            if (!remoteSaveLoaded) {
+                                try {
+                                    LoadingStatusState.text = `Reading Backup File ${backup}...`
+                                    const backupData: Uint8Array = await forageStorage.getItem(`database/dbbackup-${backup}.bin`) as unknown as Uint8Array
+                                    setDatabase(
+                                        await decodeRisuSave(backupData)
+                                    )
+                                    remoteSaveLoaded = true
+                                } catch (error) { }
+                            }
+                        }
+                        if (!remoteSaveLoaded) {
+                            // Offer recovery options to user for remote save
+                            const recovered = await handleCorruptedSaveFile(remoteSaveData, 'Account Sync (Remote)')
+                            if (!recovered) {
+                                // Try server backup as last resort
+                                await autoServerBackup()
+                                await sleep(10000)
+                            }
                         }
                     }
                 }
@@ -519,4 +552,198 @@ function assignIds() {
             assignedIds.add(chat.id)
         }
     }
+}
+
+/**
+ * Handles corrupted save file by offering recovery options to the user.
+ * @param corruptedData - The raw corrupted save file data
+ * @param source - Description of where the corrupted file came from (for display)
+ * @returns true if recovery was successful and app should continue, false if app should stop
+ */
+async function handleCorruptedSaveFile(corruptedData: Uint8Array, source: string): Promise<boolean> {
+    alertClear()
+    
+    // Recovery messages (with fallbacks for when language.recovery doesn't exist)
+    const msg = {
+        saveFileCorrupted: `Save file is corrupted (${source}). What would you like to do?`,
+        downloadCorrupted: 'Download corrupted file (for backup)',
+        attemptRecovery: 'Attempt to recover data',
+        downloadComplete: 'Corrupted file downloaded. You can try importing it elsewhere or contact support.',
+        attemptingRecovery: 'Attempting to recover data...',
+        recoveryFailed: 'Recovery failed. No data could be recovered.\n\n',
+        downloadCorruptedPrompt: 'Would you like to download the corrupted file for backup?',
+        downloadCorruptedConfirm: 'Download the corrupted file?',
+        recoverySuccessTitle: 'Data Recovery Results',
+        recoveredItems: 'Successfully Recovered:',
+        failedItems: 'Failed to Recover:',
+        totalCharacters: 'Total Characters Recovered:',
+        overwriteCurrentSave: 'Overwrite current (corrupted) save with recovered data',
+        downloadAsBackup: 'Download recovered data as backup file',
+        whatToDoWithRecovered: 'What would you like to do with the recovered data?',
+        confirmOverwrite: '⚠️ WARNING: This will replace your current corrupted save file with the recovered data. Some data may have been lost during recovery. Are you sure you want to proceed?',
+        downloadBeforeOverwrite: 'Would you like to download the corrupted file before overwriting? (Recommended)',
+        overwriteComplete: '✅ Recovery complete! Your save has been updated with the recovered data.',
+        creatingBackup: 'Creating backup file...',
+        backupDownloaded: '✅ Backup file downloaded!',
+        backupInstructions: 'You can import this file using:\n**Settings → Backup → Load Local Backup**\n\nNote: This backup only contains the database. Image assets from the corrupted save are not included.'
+    }
+    
+    // First, ask user what they want to do
+    const choice = await alertSelect([
+        msg.downloadCorrupted,
+        msg.attemptRecovery
+    ], msg.saveFileCorrupted)
+
+    if (choice === '0') {
+        // Download the corrupted file as-is
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+        await downloadFile(`corrupted-save-${timestamp}.bin`, corruptedData)
+        alertMd(msg.downloadComplete)
+        await waitAlert()
+        return false
+    }
+
+    if (choice === '1') {
+        // Attempt recovery
+        alertWait(msg.attemptingRecovery)
+        
+        const recoveryResult = await tryRecoverRisuSave(corruptedData)
+        
+        if (!recoveryResult.success || !recoveryResult.partialData) {
+            // Recovery failed completely
+            let errorMsg = msg.recoveryFailed
+            if (recoveryResult.errorMessages.length > 0) {
+                errorMsg += '**Errors:**\n'
+                for (const err of recoveryResult.errorMessages) {
+                    errorMsg += `- ${err}\n`
+                }
+            }
+            errorMsg += '\n\n' + msg.downloadCorruptedPrompt
+            
+            alertMd(errorMsg)
+            await waitAlert()
+            
+            if (await alertConfirm(msg.downloadCorruptedConfirm)) {
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+                await downloadFile(`corrupted-save-${timestamp}.bin`, corruptedData)
+            }
+            return false
+        }
+
+        // Recovery succeeded (at least partially)
+        await showRecoveryResultAndOfferOptions(corruptedData, recoveryResult, msg)
+        return true
+    }
+
+    return false
+}
+
+interface RecoveryMessages {
+    recoverySuccessTitle: string
+    recoveredItems: string
+    failedItems: string
+    totalCharacters: string
+    overwriteCurrentSave: string
+    downloadAsBackup: string
+    whatToDoWithRecovered: string
+    confirmOverwrite: string
+    downloadBeforeOverwrite: string
+    overwriteComplete: string
+    creatingBackup: string
+    backupDownloaded: string
+    backupInstructions: string
+}
+
+/**
+ * Shows the recovery result to the user and offers options for what to do next.
+ */
+async function showRecoveryResultAndOfferOptions(
+    corruptedData: Uint8Array,
+    recoveryResult: RecoveryResult,
+    msg: RecoveryMessages
+): Promise<void> {
+    // Build the recovery summary message
+    let summaryMsg = `## ${msg.recoverySuccessTitle}\n\n`
+    
+    if (recoveryResult.recoveredItems.length > 0) {
+        summaryMsg += `### ${msg.recoveredItems}\n`
+        for (const item of recoveryResult.recoveredItems) {
+            summaryMsg += `- ✅ ${item}\n`
+        }
+        summaryMsg += '\n'
+    }
+
+    if (recoveryResult.failedItems.length > 0) {
+        summaryMsg += `### ${msg.failedItems}\n`
+        for (const item of recoveryResult.failedItems) {
+            summaryMsg += `- ❌ ${item}\n`
+        }
+        summaryMsg += '\n'
+    }
+
+    // Count recovered characters
+    const charCount = recoveryResult.partialData?.characters?.length ?? 0
+    summaryMsg += `\n**${msg.totalCharacters} ${charCount}**\n`
+
+    alertMd(summaryMsg)
+    await waitAlert()
+
+    // Now offer options for what to do with recovered data
+    const actionChoice = await alertSelect([
+        msg.overwriteCurrentSave,
+        msg.downloadAsBackup
+    ], msg.whatToDoWithRecovered)
+
+    if (actionChoice === '0') {
+        // Overwrite current save
+        // First, confirm this action
+        const confirmOverwrite = await alertConfirm(msg.confirmOverwrite)
+
+        if (!confirmOverwrite) {
+            return
+        }
+
+        // Offer to download the corrupted file first
+        if (await alertConfirm(msg.downloadBeforeOverwrite)) {
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+            await downloadFile(`corrupted-save-before-overwrite-${timestamp}.bin`, corruptedData)
+        }
+
+        // Apply the recovered data
+        setDatabase(recoveryResult.partialData as Database)
+        await saveDb()
+        
+        alertMd(msg.overwriteComplete)
+        await waitAlert()
+    } else if (actionChoice === '1') {
+        // Download as local backup file (compatible with LoadLocalBackup)
+        await downloadRecoveredAsBackup(recoveryResult, msg)
+    }
+}
+
+/**
+ * Downloads the recovered data as a local backup file that can be imported via LoadLocalBackup.
+ */
+async function downloadRecoveredAsBackup(recoveryResult: RecoveryResult, msg: RecoveryMessages): Promise<void> {
+    alertWait(msg.creatingBackup)
+
+    const writer = new VirtualWriter()
+    
+    // Write the database as a risudat file (same format as SaveLocalBackup)
+    const dbData = encodeRisuSaveLegacy(recoveryResult.partialData, 'compression')
+    
+    // Write using the same format as LocalWriter.writeBackup
+    const encodedName = new TextEncoder().encode('database.risudat')
+    const nameLength = new Uint32Array([encodedName.byteLength])
+    writer.write(new Uint8Array(nameLength.buffer))
+    writer.write(encodedName)
+    const dataLength = new Uint32Array([dbData.byteLength])
+    writer.write(new Uint8Array(dataLength.buffer))
+    writer.write(dbData)
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    await downloadFile(`recovered-backup-${timestamp}.bin`, writer.buf.buffer)
+
+    alertMd(msg.backupDownloaded + '\n\n' + msg.backupInstructions)
+    await waitAlert()
 }

@@ -566,3 +566,286 @@ function checkHeader(data: Uint8Array) {
     // All bytes matched
     return header;
   }
+
+export interface RecoveryResult {
+    success: boolean
+    partialData: Partial<Database> | null
+    recoveredItems: string[]
+    failedItems: string[]
+    errorMessages: string[]
+}
+
+/**
+ * Attempts to recover as much data as possible from a corrupted save file.
+ * This function tries multiple decoding strategies and extracts whatever is readable.
+ */
+export async function tryRecoverRisuSave(data: Uint8Array): Promise<RecoveryResult> {
+    const result: RecoveryResult = {
+        success: false,
+        partialData: null,
+        recoveredItems: [],
+        failedItems: [],
+        errorMessages: []
+    }
+
+    // Try each format in order
+    const header = checkHeader(data)
+    
+    // Strategy 1: Try RisuSave format with partial block recovery
+    if (header === 'risusave') {
+        const blockResult = await tryRecoverRisuSaveBlocks(data)
+        if (blockResult.partialData && Object.keys(blockResult.partialData).length > 0) {
+            return blockResult
+        }
+    }
+
+    // Strategy 2: Try compressed format
+    if (header === 'compressed') {
+        try {
+            const decompressed = fflate.decompressSync(data.slice(magicCompressedHeader.length))
+            const decoded = decode(decompressed)
+            if (decoded && typeof decoded === 'object') {
+                result.success = true
+                result.partialData = decoded as Partial<Database>
+                result.recoveredItems.push('Full database (compressed format)')
+                return result
+            }
+        } catch (e) {
+            result.errorMessages.push(`Compressed format recovery failed: ${e}`)
+        }
+    }
+
+    // Strategy 3: Try stream compressed format
+    if (header === 'stream') {
+        try {
+            await checkCompressionStreams()
+            const slicedData = data.slice(magicStreamCompressedHeader.length)
+            const cs = new DecompressionStream('gzip')
+            const writer = cs.writable.getWriter()
+            writer.write(slicedData as any)
+            writer.close()
+            const buf = await new Response(cs.readable).arrayBuffer()
+            const decoded = unpackr.decode(new Uint8Array(buf))
+            if (decoded && typeof decoded === 'object') {
+                result.success = true
+                result.partialData = decoded as Partial<Database>
+                result.recoveredItems.push('Full database (stream compressed format)')
+                return result
+            }
+        } catch (e) {
+            result.errorMessages.push(`Stream compressed format recovery failed: ${e}`)
+        }
+    }
+
+    // Strategy 4: Try raw msgpack format
+    if (header === 'raw') {
+        try {
+            const decoded = unpackr.decode(data.slice(magicHeader.length))
+            if (decoded && typeof decoded === 'object') {
+                result.success = true
+                result.partialData = decoded as Partial<Database>
+                result.recoveredItems.push('Full database (raw format)')
+                return result
+            }
+        } catch (e) {
+            result.errorMessages.push(`Raw format recovery failed: ${e}`)
+        }
+    }
+
+    // Strategy 5: Try legacy formats without header
+    try {
+        const risuSaveHeader = new Uint8Array(Buffer.from("\u0000\u0000RISU", 'utf-8'))
+        const realData = data.subarray(risuSaveHeader.length)
+        const decoded = unpackr.decode(realData)
+        if (decoded && typeof decoded === 'object') {
+            result.success = true
+            result.partialData = decoded as Partial<Database>
+            result.recoveredItems.push('Full database (legacy format)')
+            return result
+        }
+    } catch (e) {
+        result.errorMessages.push(`Legacy format recovery failed: ${e}`)
+    }
+
+    // Strategy 6: Try raw decompression + JSON
+    try {
+        const buf = Buffer.from(fflate.decompressSync(Buffer.from(data)))
+        try {
+            const parsed = JSON.parse(buf.toString('utf-8'))
+            if (parsed && typeof parsed === 'object') {
+                result.success = true
+                result.partialData = parsed as Partial<Database>
+                result.recoveredItems.push('Full database (JSON format)')
+                return result
+            }
+        } catch {
+            const decoded = unpackr.decode(buf)
+            if (decoded && typeof decoded === 'object') {
+                result.success = true
+                result.partialData = decoded as Partial<Database>
+                result.recoveredItems.push('Full database (raw msgpack)')
+                return result
+            }
+        }
+    } catch (e) {
+        result.errorMessages.push(`Raw decompression recovery failed: ${e}`)
+    }
+
+    return result
+}
+
+/**
+ * Attempts to recover individual blocks from a RisuSave format file.
+ * Even if some blocks are corrupted, this will try to extract the valid ones.
+ */
+async function tryRecoverRisuSaveBlocks(data: Uint8Array): Promise<RecoveryResult> {
+    const result: RecoveryResult = {
+        success: false,
+        partialData: {},
+        recoveredItems: [],
+        failedItems: [],
+        errorMessages: []
+    }
+
+    let offset = magicRisuSaveHeader.length
+    const db: Partial<Database> = {}
+    db.characters = []
+
+    while (offset < data.length) {
+        const blockStartOffset = offset
+        try {
+            // Read block header
+            if (offset + 7 > data.length) {
+                result.errorMessages.push(`Incomplete block header at offset ${offset}`)
+                break
+            }
+
+            const type = data[offset]
+            const compression = data[offset + 1] === 1
+            offset += 2
+
+            const nameLength = data[offset]
+            offset += 1
+
+            if (offset + nameLength > data.length) {
+                result.errorMessages.push(`Incomplete block name at offset ${blockStartOffset}`)
+                break
+            }
+
+            const name = new TextDecoder().decode(data.subarray(offset, offset + nameLength))
+            offset += nameLength
+
+            if (offset + 4 > data.length) {
+                result.errorMessages.push(`Incomplete block length at offset ${blockStartOffset}`)
+                break
+            }
+
+            const newArrayBuf = new ArrayBuffer(4)
+            const lengthSubUint8Buf = data.slice(offset, offset + 4)
+            new Uint8Array(newArrayBuf).set(lengthSubUint8Buf)
+            const length = new Uint32Array(newArrayBuf)[0]
+            offset += 4
+
+            if (offset + length > data.length) {
+                result.errorMessages.push(`Block data truncated for "${name}" at offset ${blockStartOffset}`)
+                result.failedItems.push(`Block: ${name} (truncated)`)
+                break
+            }
+
+            let blockData = data.subarray(offset, offset + length)
+            offset += length
+
+            // Try to decompress if needed
+            if (compression) {
+                try {
+                    await checkCompressionStreams()
+                    const cs = new DecompressionStream('gzip')
+                    const writer = cs.writable.getWriter()
+                    writer.write(blockData as any)
+                    writer.close()
+                    const buf = await new Response(cs.readable).arrayBuffer()
+                    blockData = new Uint8Array(buf)
+                } catch (e) {
+                    result.errorMessages.push(`Failed to decompress block "${name}": ${e}`)
+                    result.failedItems.push(`Block: ${name} (decompression failed)`)
+                    continue
+                }
+            }
+
+            // Try to parse the block content
+            const content = new TextDecoder().decode(blockData)
+            let parsed: any
+
+            try {
+                parsed = JSON.parse(content)
+            } catch (e) {
+                result.errorMessages.push(`Failed to parse block "${name}": ${e}`)
+                result.failedItems.push(`Block: ${name} (JSON parse failed)`)
+                continue
+            }
+
+            // Process based on block type
+            switch (type) {
+                case 1: // ROOT
+                    for (const key in parsed) {
+                        if (!key.startsWith('__')) {
+                            (db as any)[key] = parsed[key]
+                        }
+                    }
+                    result.recoveredItems.push('Settings & Configuration (ROOT)')
+                    break
+                case 2: // CHARACTER_WITH_CHAT
+                    db.characters!.push(parsed)
+                    result.recoveredItems.push(`Character: ${parsed.name || name}`)
+                    break
+                case 4: // BOTPRESET
+                    db.botPresets = parsed
+                    result.recoveredItems.push('Bot Presets')
+                    break
+                case 5: // MODULES
+                    db.modules = parsed
+                    result.recoveredItems.push('Modules')
+                    break
+                case 0: // CONFIG
+                    result.recoveredItems.push('Config block')
+                    break
+                default:
+                    result.recoveredItems.push(`Unknown block type ${type}: ${name}`)
+            }
+        } catch (e) {
+            result.errorMessages.push(`Error processing block at offset ${blockStartOffset}: ${e}`)
+            // Try to skip to next potential block by scanning for patterns
+            // This is a last resort recovery attempt
+            offset = blockStartOffset + 1
+            let found = false
+            while (offset < data.length - 7) {
+                // Look for valid block type (0-6) followed by compression flag (0 or 1)
+                if (data[offset] <= 6 && (data[offset + 1] === 0 || data[offset + 1] === 1)) {
+                    const possibleNameLen = data[offset + 2]
+                    if (possibleNameLen > 0 && possibleNameLen < 100) {
+                        found = true
+                        break
+                    }
+                }
+                offset++
+            }
+            if (!found) {
+                break
+            }
+        }
+    }
+
+    // Set success if we recovered anything meaningful
+    if (result.recoveredItems.length > 0) {
+        result.success = true
+        result.partialData = db
+
+        // Ensure botPresets has default if missing
+        if (!db.botPresets || !Array.isArray(db.botPresets) || db.botPresets.length === 0) {
+            db.botPresets = [presetTemplate]
+            result.recoveredItems.push('Bot Presets (default)')
+        }
+    }
+
+    return result
+}
