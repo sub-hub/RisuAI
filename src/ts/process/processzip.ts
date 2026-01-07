@@ -258,12 +258,26 @@ export class CharXReader{
                 }
                 pointer += 1024 * 1024
             }
+            
+            if(this.allPushed && this.doneAssets >= this.assetQueueLength){
+                if(this.hashSignal){
+                    const signalId = await saveAsset(new TextEncoder().encode(this.hashSignal ?? ""))
+                }
+                this.fullPromiseResolver?.()
+            }
             return
         }
 
         await this.waitForQueue()
         this.unzip.push(data, final)
         this.allPushed = final
+
+        if(this.allPushed && this.doneAssets >= this.assetQueueLength){
+            if(this.hashSignal){
+                const signalId = await saveAsset(new TextEncoder().encode(this.hashSignal ?? ""))
+            }
+            this.fullPromiseResolver?.()
+        }
     }
 
     async read(data:Uint8Array|File|ReadableStream<Uint8Array>, arg:{
@@ -282,7 +296,6 @@ export class CharXReader{
                     break
                 }
             }
-            await this.push(new Uint8Array(0), true)
             return
         }
 
