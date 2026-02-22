@@ -1541,6 +1541,16 @@ export const languageEnglish = {
     enableRemoteSaving: "Enable Remote Saving",
     blockquoteStyling: "Blockquote Styling",
     dynamicModelRegistry: "Dynamic Model Registry",
+    togglePresets: "Toggle Presets",
+    saveTogglePreset: "Save Preset",
+    updateTogglePreset: "Update Preset",
+    renameTogglePreset: "Rename Preset",
+    deleteTogglePreset: "Delete Preset",
+    presetName: "Preset Name",
+    presetNamePrompt: "Enter preset name:",
+    presetExists: "Preset already exists. Overwrite?",
+    resetToggles: "Reset to Default",
+    resetToggleConfirm: "Are you sure you want to reset all toggles to their default values?",
 } satisfies I18nTranslation;
 
 type I18nTranslationFunction = (...args: any[]) => string;

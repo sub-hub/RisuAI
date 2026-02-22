@@ -11,6 +11,8 @@
     import OptionInput from "../UI/GUI/OptionInput.svelte";
     import TextAreaInput from '../UI/GUI/TextAreaInput.svelte'
     import TextInput from "../UI/GUI/TextInput.svelte";
+    import Button from "../UI/GUI/Button.svelte";
+    import { alertInput, alertConfirm } from "src/ts/alert";
 
     interface Props {
         chara?: character|groupChat
@@ -18,6 +20,79 @@
     }
 
     let { chara = $bindable(), noContainer }: Props = $props();
+
+    let currentPromptName = $derived(DBState.db.botPresets[DBState.db.botPresetsId]?.name || 'default');
+    let currentPresets = $derived(DBState.db.togglePresets?.[currentPromptName] || {});
+    let selectedPreset = $state('');
+
+    async function savePreset() {
+        const name = await alertInput(language.presetNamePrompt);
+        if (!name) return;
+        if (currentPresets[name] && !(await alertConfirm(language.presetExists))) return;
+        
+        if (!DBState.db.togglePresets) DBState.db.togglePresets = {};
+        if (!DBState.db.togglePresets[currentPromptName]) DBState.db.togglePresets[currentPromptName] = {};
+        
+        const currentToggles: {[key:string]:string} = {};
+        for (const key in DBState.db.globalChatVariables) {
+            if (key.startsWith('toggle_')) {
+                currentToggles[key] = DBState.db.globalChatVariables[key];
+            }
+        }
+        
+        DBState.db.togglePresets[currentPromptName][name] = currentToggles;
+        selectedPreset = name;
+    }
+
+    function updatePreset() {
+        if (!selectedPreset) return;
+        const currentToggles: {[key:string]:string} = {};
+        for (const key in DBState.db.globalChatVariables) {
+            if (key.startsWith('toggle_')) {
+                currentToggles[key] = DBState.db.globalChatVariables[key];
+            }
+        }
+        DBState.db.togglePresets[currentPromptName][selectedPreset] = currentToggles;
+    }
+
+    async function renamePreset() {
+        if (!selectedPreset) return;
+        const newName = await alertInput(language.presetNamePrompt, undefined, selectedPreset);
+        if (!newName || newName === selectedPreset) return;
+        if (currentPresets[newName] && !(await alertConfirm(language.presetExists))) return;
+        
+        DBState.db.togglePresets[currentPromptName][newName] = DBState.db.togglePresets[currentPromptName][selectedPreset];
+        delete DBState.db.togglePresets[currentPromptName][selectedPreset];
+        selectedPreset = newName;
+    }
+
+    async function deletePreset() {
+        if (!selectedPreset) return;
+        if (!(await alertConfirm(language.deleteTogglePreset + '?'))) return;
+        delete DBState.db.togglePresets[currentPromptName][selectedPreset];
+        selectedPreset = '';
+    }
+
+    function loadPreset(name: string) {
+        if (!name || !currentPresets[name]) return;
+        const preset = currentPresets[name];
+        for (const key in preset) {
+            DBState.db.globalChatVariables[key] = preset[key];
+        }
+        selectedPreset = name;
+    }
+
+    async function resetToggles() {
+        if (!(await alertConfirm(language.resetToggleConfirm))) return;
+        for (const key in DBState.db.globalChatVariables) {
+            if (key.startsWith('toggle_')) {
+                delete DBState.db.globalChatVariables[key];
+            }
+        }
+        DBState.db.jailbreakToggle = false;
+        if (chara) chara.supaMemory = false;
+        selectedPreset = '';
+    }
 
     const jailbreakToggleToken = '{{jbtoggled}}'
     const usesJailbreakToggle = (value?: string) =>
@@ -69,7 +144,32 @@
             return acc
         }, [])
     })
+
+    let hasAnyToggles = $derived(groupedToggles.length > 0 || hasJailbreakPrompt || DBState.db.supaModelType !== 'none' || DBState.db.hanuraiEnable || DBState.db.hypaV3);
 </script>
+
+{#if hasAnyToggles}
+    <div class="w-full flex flex-col gap-2 mt-2">
+        <div class="flex items-center gap-2">
+            <span class="text-textcolor shrink-0">{language.togglePresets}</span>
+            <SelectInput className="flex-1" bind:value={selectedPreset} onchange={() => loadPreset(selectedPreset)}>
+                <OptionInput value="">---</OptionInput>
+                {#each Object.keys(currentPresets) as presetName}
+                    <OptionInput value={presetName}>{presetName}</OptionInput>
+                {/each}
+            </SelectInput>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+            <Button size="sm" onclick={savePreset}>{language.saveTogglePreset}</Button>
+            {#if selectedPreset}
+                <Button size="sm" onclick={updatePreset}>{language.updateTogglePreset}</Button>
+                <Button size="sm" onclick={renamePreset}>{language.renameTogglePreset}</Button>
+                <Button size="sm" styled="danger" onclick={deletePreset}>{language.deleteTogglePreset}</Button>
+            {/if}
+            <Button size="sm" styled="danger" onclick={resetToggles}>{language.resetToggles}</Button>
+        </div>
+    </div>
+{/if}
 
 {#snippet toggles(items: sidebarToggle[], reverse: boolean = false)}
     {#each items as toggle, index}

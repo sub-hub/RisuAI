@@ -473,6 +473,7 @@ export function setDatabase(data:Database){
     data.combineTranslation ??= false
     data.customPromptTemplateToggle ??= ''
     data.globalChatVariables ??= {}
+    data.togglePresets ??= {}
     data.templateDefaultVariables ??= ''
     data.hypaAllocatedTokens ??= 3000
     data.hypaChunkSize ??= 3000
@@ -955,6 +956,7 @@ export interface Database{
     dynamicAssetsEditDisplay:boolean
     customPromptTemplateToggle:string
     globalChatVariables:{[key:string]:string}
+    togglePresets?:{[promptName:string]: {[presetName:string]: {[toggleKey:string]:string}}}
     templateDefaultVariables:string
     hypaAllocatedTokens:number
     hypaChunkSize:number
