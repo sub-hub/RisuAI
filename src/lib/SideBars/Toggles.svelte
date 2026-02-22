@@ -34,9 +34,9 @@
         if (!DBState.db.togglePresets[currentPromptName]) DBState.db.togglePresets[currentPromptName] = {};
         
         const currentToggles: {[key:string]:string} = {};
-        for (const key in DBState.db.globalChatVariables) {
-            if (key.startsWith('toggle_')) {
-                currentToggles[key] = DBState.db.globalChatVariables[key];
+        for (const toggle of ungrouped) {
+            if (toggle.key && DBState.db.globalChatVariables[`toggle_${toggle.key}`] !== undefined) {
+                currentToggles[`toggle_${toggle.key}`] = DBState.db.globalChatVariables[`toggle_${toggle.key}`];
             }
         }
         
@@ -47,9 +47,9 @@
     function updatePreset() {
         if (!selectedPreset) return;
         const currentToggles: {[key:string]:string} = {};
-        for (const key in DBState.db.globalChatVariables) {
-            if (key.startsWith('toggle_')) {
-                currentToggles[key] = DBState.db.globalChatVariables[key];
+        for (const toggle of ungrouped) {
+            if (toggle.key && DBState.db.globalChatVariables[`toggle_${toggle.key}`] !== undefined) {
+                currentToggles[`toggle_${toggle.key}`] = DBState.db.globalChatVariables[`toggle_${toggle.key}`];
             }
         }
         DBState.db.togglePresets[currentPromptName][selectedPreset] = currentToggles;
@@ -125,9 +125,9 @@
         return templateUsesJailbreakToggle(template)
     })
 
-    let groupedToggles = $derived.by(() => {
-        const ungrouped = parseToggleSyntax(DBState.db.customPromptTemplateToggle + getModuleToggles())
+    let ungrouped = $derived(parseToggleSyntax(DBState.db.customPromptTemplateToggle + getModuleToggles()));
 
+    let groupedToggles = $derived.by(() => {
         let groupOpen = false
         // group toggles together between group ... groupEnd
         return ungrouped.reduce<sidebarToggle[]>((acc, toggle) => {
