@@ -11,7 +11,6 @@
     import OptionInput from "../UI/GUI/OptionInput.svelte";
     import TextAreaInput from '../UI/GUI/TextAreaInput.svelte'
     import TextInput from "../UI/GUI/TextInput.svelte";
-    import Button from "../UI/GUI/Button.svelte";
     import { alertInput, alertConfirm } from "src/ts/alert";
 
     interface Props {
@@ -149,24 +148,72 @@
 </script>
 
 {#if hasAnyToggles}
-    <div class="w-full flex flex-col gap-2 mt-2">
-        <div class="flex items-center gap-2">
-            <span class="text-textcolor shrink-0">{language.togglePresets}</span>
-            <SelectInput className="flex-1" bind:value={selectedPreset} onchange={() => loadPreset(selectedPreset)}>
+    <div class="w-full flex flex-col gap-1 mt-2">
+        <!-- Row 1 -->
+        <div class="flex items-center gap-1.5">
+            <span class="text-textcolor text-sm shrink-0">{language.togglePresets}</span>
+            <SelectInput className="flex-1 min-w-0" bind:value={selectedPreset} onchange={() => loadPreset(selectedPreset)}>
                 <OptionInput value="">---</OptionInput>
                 {#each Object.keys(currentPresets) as presetName}
                     <OptionInput value={presetName}>{presetName}</OptionInput>
                 {/each}
             </SelectInput>
         </div>
-        <div class="flex gap-2 flex-wrap">
-            <Button size="sm" onclick={savePreset}>{language.saveTogglePreset}</Button>
+        <!-- Row 2 Buttons -->
+        <div class="flex items-center gap-1">
+            <button
+                onclick={savePreset}
+                title={language.saveTogglePreset}
+                class="p-1.5 rounded border border-darkborderc bg-darkbutton hover:bg-selected text-textcolor transition-colors"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14M5 12h14"/>
+                </svg>
+            </button>
             {#if selectedPreset}
-                <Button size="sm" onclick={updatePreset}>{language.updateTogglePreset}</Button>
-                <Button size="sm" onclick={renamePreset}>{language.renameTogglePreset}</Button>
-                <Button size="sm" styled="danger" onclick={deletePreset}>{language.deleteTogglePreset}</Button>
+                <button
+                    onclick={updatePreset}
+                    title={language.updateTogglePreset}
+                    class="p-1.5 rounded border border-darkborderc bg-darkbutton hover:bg-selected text-textcolor transition-colors"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                </button>
+                <button
+                    onclick={renamePreset}
+                    title={language.renameTogglePreset}
+                    class="p-1.5 rounded border border-darkborderc bg-darkbutton hover:bg-selected text-textcolor transition-colors"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                </button>
+                <button
+                    onclick={deletePreset}
+                    title={language.deleteTogglePreset}
+                    class="p-1.5 rounded border border-red-700 bg-transparent hover:bg-red-700 text-red-400 hover:text-textcolor transition-colors"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6l-1 14H6L5 6"/>
+                        <path d="M10 11v6M14 11v6"/>
+                        <path d="M9 6V4h6v2"/>
+                    </svg>
+                </button>
             {/if}
-            <Button size="sm" styled="danger" onclick={resetToggles}>{language.resetToggles}</Button>
+            <!-- Reset all toggles (stick to the right) -->
+            <button
+                onclick={resetToggles}
+                title={language.resetToggles}
+                class="p-1.5 rounded border border-red-700 bg-transparent hover:bg-red-700 text-red-400 hover:text-textcolor transition-colors ml-auto"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="-1 -1 26 26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1 4 1 10 7 10"/>
+                    <path d="M3.51 15a9 9 0 1 0 .49-3.14"/>
+                </svg>
+            </button>
         </div>
     </div>
 {/if}
