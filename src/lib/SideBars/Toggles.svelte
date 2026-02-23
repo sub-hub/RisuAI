@@ -149,7 +149,7 @@
 </script>
 
 {#if hasAnyToggles}
-    <div class="w-full flex flex-col gap-1 mt-2">
+    <div class="w-full flex flex-col gap-4 mt-2 mb-4">
         <!-- Row 1 -->
         <div class="flex items-center gap-1.5">
             <span class="text-textcolor text-sm shrink-0">{language.togglePresets}</span>
@@ -161,7 +161,7 @@
             </SelectInput>
         </div>
         <!-- Row 2 Buttons -->
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-2">
             <button
                 onclick={savePreset}
                 title={language.saveTogglePreset}
