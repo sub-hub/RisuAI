@@ -1551,6 +1551,7 @@ export const languageEnglish = {
     presetExists: "Preset already exists. Overwrite?",
     resetToggles: "Reset to Default",
     resetToggleConfirm: "Are you sure you want to reset all toggles to their default values?",
+    updateTogglePresetConfirm: "Update the current preset with current values?",
 } satisfies I18nTranslation;
 
 type I18nTranslationFunction = (...args: any[]) => string;

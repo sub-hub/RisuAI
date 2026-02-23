@@ -43,8 +43,9 @@
         selectedPreset = name;
     }
 
-    function updatePreset() {
+    async function updatePreset() {
         if (!selectedPreset) return;
+        if (!(await alertConfirm(language.updateTogglePresetConfirm))) return;
         const currentToggles: {[key:string]:string} = {};
         for (const toggle of ungrouped) {
             if (toggle.key && DBState.db.globalChatVariables[`toggle_${toggle.key}`] !== undefined) {
