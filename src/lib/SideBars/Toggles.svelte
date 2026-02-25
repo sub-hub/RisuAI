@@ -24,6 +24,11 @@
     let currentPresets = $derived(DBState.db.togglePresets?.[currentPromptName] || {});
     let selectedPreset = $state('');
 
+    $effect(() => {
+        void currentPromptName;
+        selectedPreset = '';
+    });
+
     async function savePreset() {
         const name = await alertInput(language.presetNamePrompt);
         if (!name) return;
@@ -38,6 +43,9 @@
                 currentToggles[`toggle_${toggle.key}`] = DBState.db.globalChatVariables[`toggle_${toggle.key}`];
             }
         }
+        if (hasJailbreakPrompt) {
+            currentToggles['__jailbreakToggle'] = DBState.db.jailbreakToggle ? '1' : '0';
+        }
         
         DBState.db.togglePresets[currentPromptName][name] = currentToggles;
         selectedPreset = name;
@@ -45,6 +53,7 @@
 
     async function updatePreset() {
         if (!selectedPreset) return;
+        if (!DBState.db.togglePresets?.[currentPromptName]) return;
         if (!(await alertConfirm(language.updateTogglePresetConfirm))) return;
         const currentToggles: {[key:string]:string} = {};
         for (const toggle of ungrouped) {
@@ -52,11 +61,15 @@
                 currentToggles[`toggle_${toggle.key}`] = DBState.db.globalChatVariables[`toggle_${toggle.key}`];
             }
         }
+        if (hasJailbreakPrompt) {
+            currentToggles['__jailbreakToggle'] = DBState.db.jailbreakToggle ? '1' : '0';
+        }
         DBState.db.togglePresets[currentPromptName][selectedPreset] = currentToggles;
     }
 
     async function renamePreset() {
         if (!selectedPreset) return;
+        if (!DBState.db.togglePresets?.[currentPromptName]) return;
         const newName = await alertInput(language.presetNamePrompt, undefined, selectedPreset);
         if (!newName || newName === selectedPreset) return;
         if (currentPresets[newName] && !(await alertConfirm(language.presetExists))) return;
@@ -68,6 +81,7 @@
 
     async function deletePreset() {
         if (!selectedPreset) return;
+        if (!DBState.db.togglePresets?.[currentPromptName]) return;
         if (!(await alertConfirm(language.deleteTogglePreset + '?'))) return;
         delete DBState.db.togglePresets[currentPromptName][selectedPreset];
         selectedPreset = '';
@@ -77,6 +91,10 @@
         if (!name || !currentPresets[name]) return;
         const preset = currentPresets[name];
         for (const key in preset) {
+            if (key === '__jailbreakToggle') {
+                DBState.db.jailbreakToggle = preset[key] === '1';
+                continue;
+            }
             DBState.db.globalChatVariables[key] = preset[key];
         }
         selectedPreset = name;
@@ -145,7 +163,7 @@
         }, [])
     })
 
-    let hasAnyToggles = $derived(groupedToggles.length > 0 || hasJailbreakPrompt || DBState.db.supaModelType !== 'none' || DBState.db.hanuraiEnable || DBState.db.hypaV3);
+    let hasAnyToggles = $derived(groupedToggles.length > 0 || hasJailbreakPrompt);
 </script>
 
 {#if hasAnyToggles}
