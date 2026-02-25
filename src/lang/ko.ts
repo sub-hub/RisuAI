@@ -1437,4 +1437,5 @@ export const languageKorean = {
     "resetToggles": "기본값으로 초기화",
     "resetToggleConfirm": "모든 토글을 기본값으로 초기화하시겠습니까?",
     "updateTogglePresetConfirm": "현재 값으로 프리셋을 갱신하시겠습니까?",
+    "showTogglePreset": "토글 프리셋 보이기",
 } satisfies DeepPartial<typeof import('./en').languageEnglish>

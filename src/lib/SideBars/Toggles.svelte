@@ -149,6 +149,7 @@
 </script>
 
 {#if hasAnyToggles}
+    {#if DBState.db.showTogglePreset}
     <div class="w-full flex flex-col gap-4 mt-2 mb-4">
         <!-- Row 1 -->
         <div class="flex items-center gap-1.5">
@@ -217,6 +218,7 @@
             </button>
         </div>
     </div>
+    {/if}
 {/if}
 
 {#snippet toggles(items: sidebarToggle[], reverse: boolean = false)}

@@ -474,6 +474,7 @@ export function setDatabase(data:Database){
     data.customPromptTemplateToggle ??= ''
     data.globalChatVariables ??= {}
     data.togglePresets ??= {}
+    data.showTogglePreset ??= false
     data.templateDefaultVariables ??= ''
     data.hypaAllocatedTokens ??= 3000
     data.hypaChunkSize ??= 3000
@@ -957,6 +958,7 @@ export interface Database{
     customPromptTemplateToggle:string
     globalChatVariables:{[key:string]:string}
     togglePresets?:{[promptName:string]: {[presetName:string]: {[toggleKey:string]:string}}}
+    showTogglePreset?:boolean
     templateDefaultVariables:string
     hypaAllocatedTokens:number
     hypaChunkSize:number
