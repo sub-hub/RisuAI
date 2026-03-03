@@ -1,7 +1,7 @@
 import { fetchNative, textifyReadableStream } from "src/ts/globalApi.svelte"
 import { LLMFlags, LLMFormat } from "src/ts/model/modellist"
 import { getDatabase, setDatabase } from "src/ts/storage/database.svelte"
-import { simplifySchema } from "src/ts/util"
+import { base64url, simplifySchema } from "src/ts/util"
 import { v4 } from "uuid"
 import { setInlayAsset, writeInlayImage } from "../files/inlays"
 import { extractJSON, getGeneralJSONSchema } from "../templates/jsonSchema"
@@ -10,6 +10,7 @@ import { alertError } from "src/ts/alert";
 import { addFetchLog } from "src/ts/globalApi.svelte"
 import type { RequestDataArgumentExtended, requestDataResponse, StreamResponseChunk } from './request'
 import { applyParameters, type LLMParameter } from './shared'
+import { bodyIntercepterStore } from "src/ts/stores.svelte"
 
 type GeminiFunctionCall = {
     id?: string;
@@ -321,7 +322,8 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
             'frequency_penalty': "frequencyPenalty",
             'thinking_tokens': "thinkingBudget"
         }, arg.mode, {
-            ignoreTopKIfZero: true
+            ignoreTopKIfZero: true,
+            modelId: arg.modelInfo.id
         }),
         safetySettings: uncensoredCatagory,
         systemInstruction: {
@@ -394,7 +396,11 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
             'TEXT', 'IMAGE'
         ]
         arg.useStreaming = false
-    }    let headers:{[key:string]:string} = {}
+    }
+
+    let headers:{[key:string]:string} = {
+        'Content-Type': 'application/json'
+    }
 
     if(db.gptVisionQuality === 'high'){
         body.generation_config.mediaResolution = "MEDIA_RESOLUTION_MEDIUM"
@@ -429,15 +435,6 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
                 bytes[i] = binaryString.charCodeAt(i);
             }
             return bytes.buffer;
-        }
-
-        function base64url(source: Uint8Array | ArrayBuffer): string {
-            const bytes = source instanceof ArrayBuffer ? new Uint8Array(source) : source;
-            let encodedSource = btoa(String.fromCharCode.apply(null, [...bytes]))
-                .replace(/=+$/, "")
-                .replace(/\+/g, "-")
-                .replace(/\//g, "_");
-            return encodedSource;
         }
 
         const time = Math.floor(Date.now() / 1000);
@@ -626,7 +623,6 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
     }
 
     if((arg.modelInfo.format === LLMFormat.GoogleCloud || arg.modelInfo.format === LLMFormat.VertexAIGemini) && arg.useStreaming){
-        headers['Content-Type'] = 'application/json'
 
         if(arg.previewBody){
             return {
@@ -734,6 +730,22 @@ async function requestGoogle(url:string, body:any, headers:{[key:string]:string}
                     }
                 }
             }   
+        }
+
+        if(data?.usageMetadata){
+            
+            for (const interceptor of bodyIntercepterStore) {
+                try {
+                    await interceptor.callback({
+                        usageMetadata: data.usageMetadata,
+                        modelStatus: data.modelStatus,
+                        promptFeedback: data.promptFeedback
+                    }, 'meta_gemini')
+                }
+                catch (e) {
+                    console.error(e)
+                }
+            }
         }
         return parts
     }
@@ -972,6 +984,13 @@ function getTranStream():TransformStream<Uint8Array, StreamResponseChunk> {
                                 }
                             }
                         }
+
+                        if(jsonData.usageMetadata){
+                            readed['__usageMetadata'] = JSON.stringify(jsonData.usageMetadata)
+                        }
+                        if(jsonData.modelStatus){
+                            readed['__modelStatus'] = JSON.stringify(jsonData.modelStatus)
+                        }
                     } 
                 }
                 control.enqueue(readed)
@@ -1184,6 +1203,15 @@ function wrapToolStream(
                         controller.enqueue({"0": prefix})
                         
                         continue
+                    }
+
+                    for (const interceptor of bodyIntercepterStore) {
+                        try {
+                            await interceptor.callback(value, 'meta_gemini_stream')
+                        }
+                        catch (e) {
+                            console.error(e)
+                        }
                     }
                     return controller.close()
                 }
