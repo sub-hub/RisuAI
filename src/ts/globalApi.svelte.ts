@@ -112,6 +112,34 @@ let checkedPaths: string[] = []
  * @returns {Promise<string>} - A promise that resolves to the source URL of the file.
  */
 export async function getFileSrc(loc: string) {
+    const getMimeTypeFromLoc = (path: string) => {
+        const ext = path.split('.').pop()?.toLocaleLowerCase() ?? ''
+        switch (ext) {
+            case 'png': return 'image/png'
+            case 'jpg':
+            case 'jpeg': return 'image/jpeg'
+            case 'webp': return 'image/webp'
+            case 'gif': return 'image/gif'
+            case 'svg': return 'image/svg+xml'
+            case 'avif': return 'image/avif'
+            case 'mp4': return 'video/mp4'
+            case 'webm': return 'video/webm'
+            case 'mp3': return 'audio/mpeg'
+            case 'wav': return 'audio/wav'
+            case 'ogg': return 'audio/ogg'
+            case 'ttf': return 'font/ttf'
+            case 'otf': return 'font/otf'
+            case 'woff': return 'font/woff'
+            case 'woff2': return 'font/woff2'
+            case 'css': return 'text/css'
+            default: return 'application/octet-stream'
+        }
+    }
+
+    const getDataUrl = (path: string, data: Uint8Array) => {
+        return `data:${getMimeTypeFromLoc(path)};base64,${Buffer.from(data).toString('base64')}`
+    }
+
     if (isTauri) {
         if (loc.startsWith('assets')) {
             if (appDataDirPath === '') {
@@ -148,6 +176,10 @@ export async function getFileSrc(loc: string) {
                     }
                     else {
                         const f: Uint8Array = await forageStorage.getItem(loc) as unknown as Uint8Array
+                        if (!f) {
+                            fileCache.res[ind] = 'done'
+                            return ''
+                        }
                         await fetch("/sw/register/" + encoded, {
                             method: "POST",
                             body: f as any
@@ -157,17 +189,47 @@ export async function getFileSrc(loc: string) {
                     }
                     return "/sw/img/" + encoded
                 } catch (error) {
-
+                    // Service worker registration can fail transiently on mobile/network hiccups.
+                    // Fall back to a direct data URL so this key doesn't remain stuck in "loading" forever.
+                    try {
+                        const f: Uint8Array = await forageStorage.getItem(loc) as unknown as Uint8Array
+                        if (f) {
+                            fileCache.res[ind] = f
+                            return getDataUrl(loc, f)
+                        }
+                    } catch (error2) { }
+                    fileCache.res[ind] = 'done'
+                    return ''
                 }
             }
             else {
                 const f = fileCache.res[ind]
                 if (f === 'loading') {
-                    while (fileCache.res[ind] === 'loading') {
+                    let timeoutCount = 0
+                    while (fileCache.res[ind] === 'loading' && timeoutCount < 500) {
                         await sleep(10)
+                        timeoutCount++
+                    }
+                    if (fileCache.res[ind] === 'loading') {
+                        try {
+                            const r: Uint8Array = await forageStorage.getItem(loc) as unknown as Uint8Array
+                            if (r) {
+                                fileCache.res[ind] = r
+                                return getDataUrl(loc, r)
+                            }
+                        } catch (error3) { }
+                        fileCache.res[ind] = 'done'
+                        return ''
                     }
                 }
-                return "/sw/img/" + encoded
+                const resolved = fileCache.res[ind]
+                if (resolved === 'done') {
+                    return "/sw/img/" + encoded
+                }
+                if (resolved === 'loading') {
+                    return ''
+                }
+                return getDataUrl(loc, resolved)
             }
         }
         else {
