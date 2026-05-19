@@ -32,6 +32,11 @@
 
     let _sliderMult = $derived(item.options?.multiple ?? 1);
     let _sliderDisabled = $derived(localValue === -1000 || localValue === undefined || localValue === UNINITIALIZED);
+    let customText = $derived(
+        typeof item.options?.customText === 'function'
+            ? item.options.customText(localValue)
+            : item.options?.customText
+    );
 </script>
 
 <span class="text-textcolor {item.classes ?? ''}">
@@ -41,13 +46,14 @@
 <div class="flex gap-2 items-center mb-4">
     <div class="flex-1">
         <SliderInput
+            marginBottom={false}
             min={item.options?.min}
             max={item.options?.max}
             step={item.options?.step}
             fixed={item.options?.fixed}
             multiple={item.options?.multiple}
             disableable={item.options?.disableable}
-            customText={item.options?.customText}
+            {customText}
             bind:value={localValue}
         />
     </div>

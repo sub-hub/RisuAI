@@ -1,4 +1,5 @@
 import { type memoryVector, HypaProcesser, similarity } from "./hypamemory";
+import { isContextModel, getContextProvider } from "./contextualEmbedding";
 import { TaskRateLimiter } from "./taskRateLimiter";
 import {
     type EmbeddingText,
@@ -38,6 +39,7 @@ export interface HypaV3Settings {
     preserveOrphanedMemory: boolean;
     processRegexScript: boolean;
     doNotSummarizeUserMessage: boolean;
+    summaryChunkSeparator: string;
     // Experimental
     useExperimentalImpl: boolean;
     summarizationRequestsPerMinute: number;
@@ -99,6 +101,19 @@ export interface HypaV3Result {
 const logPrefix = "[HypaV3]";
 const memoryPromptTag = "Past Events Summary";
 const summarySeparator = "\n\n";
+
+function splitBySeparator(text: string, separator: string): string[] {
+    try {
+        const regexMatch = separator.match(/^\/(.+)\/([gimuy]*)$/);
+        if (regexMatch) {
+            const [, pattern, flags] = regexMatch;
+            return text.split(new RegExp(pattern, flags));
+        }
+        return text.split(new RegExp(separator));
+    } catch {
+        return text.split("\n\n");
+    }
+}
 
 export async function hypaMemoryV3(
     chats: OpenAIChat[],
@@ -599,8 +614,7 @@ async function hypaMemoryV3MainExp(
         // Dynamically generate embedding texts
         const ebdTexts: EmbeddingText<Summary>[] = unusedSummaries.flatMap(
             (summary, summaryIndex) => {
-                const splitted = summary.text
-                    .split("\n\n")
+                const splitted = splitBySeparator(summary.text, settings.summaryChunkSeparator)
                     .filter((e) => e.trim().length > 0);
 
                 return splitted.map((chunk, chunkIndex) => ({
@@ -1319,8 +1333,7 @@ async function hypaMemoryV3Main(
         const summaryChunks: SummaryChunk[] = [];
 
         unusedSummaries.forEach((summary) => {
-            const splitted = summary.text
-                .split("\n\n")
+            const splitted = splitBySeparator(summary.text, settings.summaryChunkSeparator)
                 .filter((e) => e.trim().length > 0);
 
             summaryChunks.push(
@@ -1720,11 +1733,22 @@ export async function summarize(oaiMessages: OpenAIChat[], isResummarize: boolea
 
         // Remove thoughts content for API
         const thoughtsRegex = /<Thoughts>[\s\S]*?<\/Thoughts>/g;
+        const result = response.result.replace(thoughtsRegex, "").trim();
 
-        return response.result.replace(thoughtsRegex, "").trim();
+        if (result.length === 0) {
+            throw new Error("Empty summary after removing thoughts content");
+        }
+
+        return result;
     }
 
-    // Local
+    // Local — ensure system message comes first for WebLLM models
+    const firstSystemIndex = formated.findIndex(m => m.role === 'system');
+    if (firstSystemIndex > 0) {
+        const [system] = formated.splice(firstSystemIndex, 1);
+        formated.unshift(system);
+    }
+
     const content = await chatCompletion(formated, settings.summarizationModel, {
         max_tokens: 8192,
         temperature: 0,
@@ -1739,8 +1763,13 @@ export async function summarize(oaiMessages: OpenAIChat[], isResummarize: boolea
 
     // Remove think content
     const thinkRegex = /<think>[\s\S]*?<\/think>/g;
+    const result = content.replace(thinkRegex, "").trim();
 
-    return content.replace(thinkRegex, "").trim();
+    if (result.length === 0) {
+        throw new Error("Empty summary after removing think content");
+    }
+
+    return result;
 }
 
 export function getCurrentHypaV3Preset(): HypaV3Preset {
@@ -1771,6 +1800,7 @@ export function createHypaV3Preset(
         preserveOrphanedMemory: false,
         processRegexScript: false,
         doNotSummarizeUserMessage: false,
+        summaryChunkSeparator: "\\n\\n",
         // Experimental
         useExperimentalImpl: false,
         summarizationRequestsPerMinute: 20,
@@ -1895,31 +1925,105 @@ class HypaProcesserEx extends HypaProcesser {
     summaryChunkVectors: SummaryChunkVector[] = [];
 
     async addSummaryChunks(chunks: SummaryChunk[]): Promise<void> {
-        // Maintain the superclass's caching structure by adding texts
-        const texts = chunks.map((chunk) => chunk.text);
+        if (isContextModel(this.model)) {
+            await this.addSummaryChunksContextual(chunks);
+            return;
+        }
 
+        const texts = chunks.map((chunk) => chunk.text);
         await this.addText(texts);
 
-        // Create new SummaryChunkVectors
         const newSummaryChunkVectors: SummaryChunkVector[] = [];
-
         for (const chunk of chunks) {
             const vector = this.vectors.find((v) => v.content === chunk.text);
+            if (!vector) {
+                throw new Error(
+                    `Failed to create vector for summary chunk:\n${chunk.text}`
+                );
+            }
+            newSummaryChunkVectors.push({ chunk, vector });
+        }
 
+        this.summaryChunkVectors.push(...newSummaryChunkVectors);
+    }
+
+    private async addSummaryChunksContextual(chunks: SummaryChunk[]): Promise<void> {
+        const provider = getContextProvider(this.model);
+
+        const cacheKeyFor = (text: string, groupTexts: string[]) => {
+            return `${text}${provider.getCacheKeySuffix(groupTexts)}`;
+        };
+
+        const summaryGroups = new Map<Summary, SummaryChunk[]>();
+        for (const chunk of chunks) {
+            const group = summaryGroups.get(chunk.summary) || [];
+            group.push(chunk);
+            summaryGroups.set(chunk.summary, group);
+        }
+
+        const groupsToEmbed: SummaryChunk[][] = [];
+        const cachedVectors = new Map<string, memoryVector>();
+
+        for (const [, group] of summaryGroups) {
+            const groupTexts = group.map(c => c.text);
+            let allCached = true;
+            const groupCache = new Map<string, memoryVector>();
+
+            for (const chunk of group) {
+                const cached: memoryVector = await this.forage.getItem(cacheKeyFor(chunk.text, groupTexts));
+                if (cached) {
+                    groupCache.set(chunk.text, cached);
+                } else {
+                    allCached = false;
+                }
+            }
+
+            if (allCached) {
+                for (const [text, vector] of groupCache) {
+                    cachedVectors.set(text, vector);
+                }
+            } else {
+                groupsToEmbed.push(group);
+            }
+        }
+
+        if (groupsToEmbed.length > 0) {
+            const groups = groupsToEmbed.map(group =>
+                group.map(chunk => chunk.text)
+            );
+
+            const results = await provider.embedDocumentGroups(groups);
+
+            for (let i = 0; i < groupsToEmbed.length; i++) {
+                const group = groupsToEmbed[i];
+                const groupTexts = group.map(c => c.text);
+                const embeddings = results[i];
+
+                for (let j = 0; j < group.length; j++) {
+                    const chunk = group[j];
+                    const embedding = embeddings[j];
+                    const vector: memoryVector = {
+                        content: chunk.text,
+                        embedding
+                    };
+
+                    await this.forage.setItem(cacheKeyFor(chunk.text, groupTexts), vector);
+                    cachedVectors.set(chunk.text, vector);
+                }
+            }
+        }
+
+        for (const chunk of chunks) {
+            const vector = cachedVectors.get(chunk.text);
             if (!vector) {
                 throw new Error(
                     `Failed to create vector for summary chunk:\n${chunk.text}`
                 );
             }
 
-            newSummaryChunkVectors.push({
-                chunk,
-                vector,
-            });
+            this.vectors.push(vector);
+            this.summaryChunkVectors.push({ chunk, vector });
         }
-
-        // Append new SummaryChunkVectors to the existing collection
-        this.summaryChunkVectors.push(...newSummaryChunkVectors);
     }
 
     async similaritySearchScoredEx(
