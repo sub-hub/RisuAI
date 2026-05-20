@@ -52,7 +52,7 @@ export class AutoStorage{
 
             const a = accountStorage.getItem('database/database.bin')
             if(a){
-                const sel = await alertSelect([language.loadDataFromAccount, language.saveCurrentDataToAccount])
+                const sel = await alertSelect([language.loadDataFromAccount, language.saveCurrentDataToAccount, language.cancelAccountSync])
                 if(sel === "0"){
                     this.realStorage = accountStorage
                     alertStore.set({
@@ -63,6 +63,13 @@ export class AutoStorage{
                     localStorage.setItem('fallbackRisuToken',JSON.stringify(db.account))
                     this.isAccount = true
                     return true
+                }
+                else if(sel === "2"){
+                    localStorage.setItem('dosync', 'avoid')
+                    if(db?.account){
+                        db.account.useSync = false
+                    }
+                    return false
                 }
             }
 
