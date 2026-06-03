@@ -398,6 +398,10 @@ export function setDatabase(data:Database){
     data.NAIsettings.mirostat_lr ??= 1
     data.autofillRequestUrl ??= true
     data.customProxyRequestModel ??= ''
+    data.subCustomProxyRequestModel ??= ''
+    data.subForceReplaceUrl ??= ''
+    data.subProxyKey ??= ''
+    data.subCustomAPIFormat ??= LLMFormat.OpenAICompatible
     data.generationSeed ??= -1
     data.newOAIHandle ??= true
     data.localNetworkMode ??= false
@@ -550,6 +554,7 @@ export function setDatabase(data:Database){
     data.groupOtherBotRole ??= 'user'
     data.customGUI ??= ''
     data.customAPIFormat ??= LLMFormat.OpenAICompatible
+    data.subCustomAPIFormat ??= LLMFormat.OpenAICompatible
     data.systemContentReplacement ??= `system: {{slot}}`
     data.systemRoleReplacement ??= 'user'
     data.vertexAccessToken ??= ''
@@ -953,6 +958,10 @@ export interface Database{
     localStopStrings?:string[]
     autofillRequestUrl:boolean
     customProxyRequestModel:string
+    subCustomProxyRequestModel:string
+    subForceReplaceUrl:string
+    subProxyKey:string
+    subCustomAPIFormat:LLMFormat
     generationSeed:number
     newOAIHandle:boolean
     gptVisionQuality:string
@@ -1577,6 +1586,10 @@ export interface botPreset{
     NAIappendName?: boolean
     localStopStrings?: string[]
     customProxyRequestModel?: string
+    subCustomProxyRequestModel?: string
+    subForceReplaceUrl?: string
+    subProxyKey?: string
+    subCustomAPIFormat?: LLMFormat
     reverseProxyOobaArgs?: OobaChatCompletionRequestParams
     top_p?: number
     promptSettings?: PromptSettings
@@ -1972,6 +1985,10 @@ export const presetTemplate:botPreset = {
     reverseProxyOobaArgs: {
         mode: 'instruct'
     },
+    subCustomProxyRequestModel: '',
+    subForceReplaceUrl: '',
+    subProxyKey: '',
+    subCustomAPIFormat: LLMFormat.OpenAICompatible,
     top_p: 1,
     useInstructPrompt: false,
     verbosity: 1
@@ -2034,6 +2051,10 @@ export function saveCurrentPreset(){
         localStopStrings: db.localStopStrings,
         autoSuggestPrompt: db.autoSuggestPrompt,
         customProxyRequestModel: db.customProxyRequestModel,
+        subCustomProxyRequestModel: db.subCustomProxyRequestModel,
+        subForceReplaceUrl: db.subForceReplaceUrl,
+        subProxyKey: db.subProxyKey,
+        subCustomAPIFormat: safeStructuredClone(db.subCustomAPIFormat),
         reverseProxyOobaArgs: safeStructuredClone(db.reverseProxyOobaArgs) ?? null,
         top_p: db.top_p ?? 1,
         promptSettings: safeStructuredClone(db.promptSettings) ?? null,
@@ -2151,6 +2172,10 @@ export function setPreset(db:Database, newPres: botPreset){
     db.NAIsettings.mirostat_lr ??= 1
     db.localStopStrings = newPres.localStopStrings
     db.customProxyRequestModel = newPres.customProxyRequestModel ?? ''
+    db.subCustomProxyRequestModel = newPres.subCustomProxyRequestModel ?? ''
+    db.subForceReplaceUrl = newPres.subForceReplaceUrl ?? ''
+    db.subProxyKey = newPres.subProxyKey ?? ''
+    db.subCustomAPIFormat = safeStructuredClone(newPres.subCustomAPIFormat) ?? LLMFormat.OpenAICompatible
     db.reverseProxyOobaArgs = safeStructuredClone(newPres.reverseProxyOobaArgs) ?? {
         mode: 'instruct'
     }
@@ -2255,6 +2280,8 @@ export async function downloadPreset(id:number, type:'json'|'risupreset'|'return
     pres.forceReplaceUrl = ''
     pres.forceReplaceUrl2 = ''
     pres.proxyKey = ''
+    pres.subForceReplaceUrl = ''
+    pres.subProxyKey = ''
     pres.textgenWebUIStreamURL=  ''
     pres.textgenWebUIBlockingURL=  ''
 

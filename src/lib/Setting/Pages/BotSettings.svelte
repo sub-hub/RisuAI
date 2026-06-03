@@ -210,35 +210,68 @@
         <TextInput bind:value={DBState.db.novelai.token}/>
     {/if}
     {#if DBState.db.aiModel === 'reverse_proxy' || DBState.db.subModel === 'reverse_proxy'}
-        <span class="text-textcolor mt-2">URL <Help key="forceUrl"/></span>
-        <TextInput marginBottom={false} size={"sm"} bind:value={DBState.db.forceReplaceUrl} placeholder="https//..." />
-        <span class="text-textcolor mt-4"> {language.proxyAPIKey}</span>
-        <TextInput hideText={DBState.db.hideApiKey} marginBottom={false} size={"sm"} placeholder="leave it blank if it hasn't password" bind:value={DBState.db.proxyKey} />
-        <span class="text-textcolor mt-4"> {language.proxyRequestModel}</span>
-        <TextInput marginBottom={false} size={"sm"} bind:value={DBState.db.customProxyRequestModel} placeholder="Name" />
-        <span class="text-textcolor mt-4"> {language.format}</span>
-        <SelectInput value={DBState.db.customAPIFormat.toString()} onchange={(e) => {
-            DBState.db.customAPIFormat = parseInt(e.currentTarget.value) as LLMFormat
-        }}>
-            <OptionInput value={LLMFormat.OpenAICompatible.toString()}>
-                OpenAI Compatible
-            </OptionInput>
-            <OptionInput value={LLMFormat.OpenAIResponseAPI.toString()}>
-                OpenAI Response API
-            </OptionInput>
-            <OptionInput value={LLMFormat.Anthropic.toString()}>
-                Anthropic Claude
-            </OptionInput>
-            <OptionInput value={LLMFormat.Mistral.toString()}>
-                Mistral
-            </OptionInput>
-            <OptionInput value={LLMFormat.GoogleCloud.toString()}>
-                Google Cloud
-            </OptionInput>
-            <OptionInput value={LLMFormat.Cohere.toString()}>
-                Cohere
-            </OptionInput>
-        </SelectInput>
+        {#if DBState.db.aiModel === 'reverse_proxy'}
+            <span class="text-textcolor mt-2">{language.model} URL <Help key="forceUrl"/></span>
+            <TextInput marginBottom={false} size={"sm"} bind:value={DBState.db.forceReplaceUrl} placeholder="https//..." />
+            <span class="text-textcolor mt-4"> {language.model} {language.proxyAPIKey}</span>
+            <TextInput hideText={DBState.db.hideApiKey} marginBottom={false} size={"sm"} placeholder="leave it blank if it hasn't password" bind:value={DBState.db.proxyKey} />
+            <span class="text-textcolor mt-4"> {language.model} {language.proxyRequestModel}</span>
+            <TextInput marginBottom={false} size={"sm"} bind:value={DBState.db.customProxyRequestModel} placeholder="Name" />
+            <span class="text-textcolor mt-4"> {language.model} {language.format}</span>
+            <SelectInput value={DBState.db.customAPIFormat.toString()} onchange={(e) => {
+                DBState.db.customAPIFormat = parseInt(e.currentTarget.value) as LLMFormat
+            }}>
+                <OptionInput value={LLMFormat.OpenAICompatible.toString()}>
+                    OpenAI Compatible
+                </OptionInput>
+                <OptionInput value={LLMFormat.OpenAIResponseAPI.toString()}>
+                    OpenAI Response API
+                </OptionInput>
+                <OptionInput value={LLMFormat.Anthropic.toString()}>
+                    Anthropic Claude
+                </OptionInput>
+                <OptionInput value={LLMFormat.Mistral.toString()}>
+                    Mistral
+                </OptionInput>
+                <OptionInput value={LLMFormat.GoogleCloud.toString()}>
+                    Google Cloud
+                </OptionInput>
+                <OptionInput value={LLMFormat.Cohere.toString()}>
+                    Cohere
+                </OptionInput>
+            </SelectInput>
+        {/if}
+        {#if DBState.db.subModel === 'reverse_proxy'}
+            <span class="text-textcolor mt-2">{language.submodel} URL <Help key="forceUrl"/></span>
+            <TextInput marginBottom={false} size={"sm"} bind:value={DBState.db.subForceReplaceUrl} placeholder="https//..." />
+            <span class="text-textcolor mt-4"> {language.submodel} {language.proxyAPIKey}</span>
+            <TextInput hideText={DBState.db.hideApiKey} marginBottom={false} size={"sm"} placeholder="leave it blank if it hasn't password" bind:value={DBState.db.subProxyKey} />
+            <span class="text-textcolor mt-4"> {language.submodel} {language.proxyRequestModel}</span>
+            <TextInput marginBottom={false} size={"sm"} bind:value={DBState.db.subCustomProxyRequestModel} placeholder="Name" />
+            <span class="text-textcolor mt-4"> {language.submodel} {language.format}</span>
+            <SelectInput value={DBState.db.subCustomAPIFormat.toString()} onchange={(e) => {
+                DBState.db.subCustomAPIFormat = parseInt(e.currentTarget.value) as LLMFormat
+            }}>
+                <OptionInput value={LLMFormat.OpenAICompatible.toString()}>
+                    OpenAI Compatible
+                </OptionInput>
+                <OptionInput value={LLMFormat.OpenAIResponseAPI.toString()}>
+                    OpenAI Response API
+                </OptionInput>
+                <OptionInput value={LLMFormat.Anthropic.toString()}>
+                    Anthropic Claude
+                </OptionInput>
+                <OptionInput value={LLMFormat.Mistral.toString()}>
+                    Mistral
+                </OptionInput>
+                <OptionInput value={LLMFormat.GoogleCloud.toString()}>
+                    Google Cloud
+                </OptionInput>
+                <OptionInput value={LLMFormat.Cohere.toString()}>
+                    Cohere
+                </OptionInput>
+            </SelectInput>
+        {/if}
     {/if}
     {#if modelInfo.provider === LLMProvider.Cohere || subModelInfo.provider === LLMProvider.Cohere}
         <span class="text-textcolor mt-4">Cohere {language.apiKey}</span>

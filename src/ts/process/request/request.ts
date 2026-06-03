@@ -465,10 +465,17 @@ export async function requestChatDataMain(arg:requestDataArgument, model:ModelMo
     targ.mode = model
     targ.extractJson = arg.extractJson ?? db.extractJson
     if(targ.aiModel === 'reverse_proxy'){
-        targ.modelInfo.internalID = db.customProxyRequestModel
-        targ.modelInfo.format = db.customAPIFormat
-        targ.customURL = db.forceReplaceUrl
-        targ.key = db.proxyKey
+        if(model === 'submodel' && db.subModel === 'reverse_proxy'){
+            targ.modelInfo.internalID = db.subCustomProxyRequestModel || db.customProxyRequestModel
+            targ.modelInfo.format = db.subCustomAPIFormat
+            targ.customURL = db.subForceReplaceUrl || db.forceReplaceUrl
+            targ.key = db.subProxyKey || db.proxyKey
+        } else {
+            targ.modelInfo.internalID = db.customProxyRequestModel
+            targ.modelInfo.format = db.customAPIFormat
+            targ.customURL = db.forceReplaceUrl
+            targ.key = db.proxyKey
+        }
     }
     if(targ.aiModel.startsWith('xcustom:::')){
         const found = db.customModels.find(m => m.id === targ.aiModel)

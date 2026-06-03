@@ -2,9 +2,10 @@ import { getDatabase } from "src/ts/storage/database.svelte";
 
 export function getGenerationModelString(name?:string){
     const db = getDatabase()
+    const isSub = name === db.subModel
     switch (name ?? db.aiModel){
         case 'reverse_proxy':
-            return 'custom-' + (db.reverseProxyOobaMode ? 'ooba' : db.customProxyRequestModel)
+            return 'custom-' + (db.reverseProxyOobaMode ? 'ooba' : (isSub ? (db.subCustomProxyRequestModel || db.customProxyRequestModel) : db.customProxyRequestModel))
         case 'openrouter':
             return 'openrouter-' + db.openrouterRequestModel
         case 'nanogpt': {

@@ -212,7 +212,7 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
     let requestModel = (aiModel === 'reverse_proxy' || aiModel === 'openrouter') ? db.proxyRequestModel : aiModel
     let openrouterRequestModel = db.openrouterRequestModel
     if(aiModel === 'reverse_proxy'){
-        requestModel = db.customProxyRequestModel
+        requestModel = arg.modelInfo.internalID || db.customProxyRequestModel
     }
     if(aiModel === 'nanogpt'){
         requestModel = db.nanogptRequestModel
@@ -508,8 +508,7 @@ export async function requestOpenAI(arg:RequestDataArgumentExtended):Promise<req
         if(!(
             aiModel.startsWith('gpt') || 
             (aiModel == 'reverse_proxy' && (
-                db.proxyRequestModel?.startsWith('gpt') ||
-                (db.proxyRequestModel === 'custom' && db.customProxyRequestModel.startsWith('gpt'))
+                arg.modelInfo.internalID?.startsWith('gpt')
             )))){
             delete body.logit_bias
         }
