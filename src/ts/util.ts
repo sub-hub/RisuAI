@@ -49,6 +49,9 @@ const domSelect = true
 export async function selectSingleFile(ext:string[]){
     if(domSelect){
         const v = await selectFileByDom(ext, 'single')
+        if(!v || v.length === 0 || !v[0]){
+            return null
+        }
         const file = v[0]
         return {name: file.name,data:await readFileAsUint8Array(file)}
     }
@@ -71,8 +74,12 @@ export async function selectSingleFile(ext:string[]){
 export async function selectMultipleFile(ext:string[]){
     if(!isTauri){
         const v = await selectFileByDom(ext, 'multiple')
+        if(!v || v.length === 0){
+            return []
+        }
         let arr:{name:string, data:Uint8Array}[] = []
         for(const file of v){
+            if(!file) continue
             arr.push({name: file.name,data:await readFileAsUint8Array(file)})
         }
         return arr
@@ -178,9 +185,29 @@ export function selectFileByDom(allowedExtensions:string[], multiple:'multiple'|
             fileInput.accept = '*'
         }
 
-    
-        fileInput.addEventListener('change', (event) => {
+        let resolved = false;
+
+        const cleanup = () => {
+            if (resolved) return;
+            resolved = true;
+            fileInput.remove();
+            window.removeEventListener('focus', handleWindowFocus);
+        };
+
+        const handleWindowFocus = () => {
+            // Window regained focus after file picker was dismissed (e.g. cancel on iOS Safari).
+            // Give the 'change' event a chance to fire first, then resolve as cancellation.
+            setTimeout(() => {
+                if (!resolved) {
+                    cleanup();
+                    resolve([]);
+                }
+            }, 300);
+        };
+
+        fileInput.addEventListener('change', () => {
             if (fileInput.files.length === 0) {
+                cleanup();
                 resolve([]);
                 return;
             }
@@ -190,9 +217,19 @@ export function selectFileByDom(allowedExtensions:string[], multiple:'multiple'|
                 return !allowedExtensions || allowedExtensions.includes(fileExtension);
             })) 
     
-            fileInput.remove()
+            cleanup();
             resolve(files);
         });
+
+        // 'cancel' event is supported in modern browsers (incl. iOS Safari 15+)
+        fileInput.addEventListener('cancel', () => {
+            cleanup();
+            resolve([]);
+        });
+
+        // Fallback for iOS Safari <15: detect cancel via window focus event.
+        // When user dismisses the file picker without selecting, Safari returns focus.
+        window.addEventListener('focus', handleWindowFocus);
     
         document.body.appendChild(fileInput);
         fileInput.click();

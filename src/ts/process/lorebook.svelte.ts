@@ -666,11 +666,11 @@ export async function importLoreBook(mode:'global'|'local'|'sglobal'){
     let lore = 
         mode === 'global' ? DBState.db.characters[selectedID].globalLore : 
         DBState.db.characters[selectedID].chats[page].localLore
-    const lorebook = (await selectSingleFile(['json', 'lorebook'])).data
-    if(!lorebook){
+    const result = await selectSingleFile(['json', 'lorebook'])
+    if(!result || !result.data){
         return
     }
- 
+    const lorebook = result.data
 
 
     try {
@@ -682,8 +682,11 @@ export async function importLoreBook(mode:'global'|'local'|'sglobal'){
             }
         }
         else if(importedlore.entries){
-            const entries:{[key:string]:CCLorebook} = importedlore.entries
-            lore.push(...convertExternalLorebook(entries))
+            const entries = importedlore.entries
+            const converted = convertExternalLorebook(entries)
+            if(converted.length > 0){
+                lore.push(...converted)
+            }
         }
         if(mode === 'global'){
             DBState.db.characters[selectedID].globalLore = lore
@@ -719,10 +722,13 @@ export interface CCLorebook{
     }
 }
 
-export function convertExternalLorebook(entries:{[key:string]:CCLorebook}){
+export function convertExternalLorebook(entries:Record<string,CCLorebook|undefined|null>){
     let lore:loreBook[] = []
-    for(const key in entries){
+    for(const key of Object.keys(entries)){
         const currentLore = entries[key]
+        if(!currentLore || typeof currentLore !== 'object'){
+            continue
+        }
         lore.push({
             key: currentLore.key ? currentLore.key.join(', ') :
                 currentLore.keys ? currentLore.keys.join(', ') :
