@@ -7,7 +7,8 @@
     import ClaudeThinkingSeparateParams from "../Setting/Pages/ClaudeThinkingSeparateParams.svelte";
     import type { SeparateParameters } from "src/ts/storage/database.svelte";
     import { downloadFile } from "src/ts/globalApi.svelte";
-    import { FileDownIcon, FileUpIcon, ImportIcon } from "@lucide/svelte";
+    import { FileDownIcon, FileUpIcon, ImportIcon, PlusIcon, TrashIcon } from "@lucide/svelte";
+    import TextInput from "src/lib/UI/GUI/TextInput.svelte";
     import { selectSingleFile } from "src/ts/util";
     import { getModelInfo } from "src/ts/model/modellist";
 
@@ -96,6 +97,40 @@
 <span class="text-textcolor">{'Verbosity'}</span>
 <SegmentedControl bind:value={value.verbosity} options={verbosityOptions} />
 {/if}
+
+<details class="mt-4">
+    <summary class="text-textcolor cursor-pointer font-medium mb-2">{language.additionalParams}</summary>
+    <table class="w-full">
+        <tbody>
+            <tr>
+                <th class="text-textcolor font-medium">{language.key}</th>
+                <th class="text-textcolor font-medium">{language.value}</th>
+                <th>
+                    <button class="cursor-pointer hover:text-green-500 flex justify-center items-center w-full" onclick={() => {
+                        if (!value.additionalParams) value.additionalParams = []
+                        value.additionalParams.push(['', ''])
+                    }}><PlusIcon /></button>
+                </th>
+            </tr>
+            {#if !value.additionalParams || value.additionalParams.length === 0}
+                <tr>
+                    <td colspan="3" class="text-textcolor2 text-center">{language.noData}</td>
+                </tr>
+            {/if}
+            {#each value.additionalParams || [] as _, i}
+                <tr>
+                    <td class="pr-1"><TextInput bind:value={value.additionalParams[i][0]} size="sm" fullwidth/></td>
+                    <td class="pr-1"><TextInput bind:value={value.additionalParams[i][1]} size="sm" fullwidth/></td>
+                    <td>
+                        <button class="cursor-pointer hover:text-red-500 flex justify-center items-center h-full w-full" onclick={() => {
+                            value.additionalParams.splice(i, 1)
+                        }}><TrashIcon /></button>
+                    </td>
+                </tr>
+            {/each}
+        </tbody>
+    </table>
+</details>
 
 {#if withImportExport}
     <div class="flex">
