@@ -44,11 +44,30 @@ export function setObjectValue<T>(obj: T, key: string, value: any): T {
     return obj
 }
 
-export function getAdditionalParameters(aiModel?: string): [string, string][] {
+export function getAdditionalParameters(aiModel?: string, modelMode?: ModelModeExtended): [string, string][] {
     const db = getDatabase()
 
     if (!aiModel) {
         return []
+    }
+
+    // If parameter separation is enabled and we're in an aux mode,
+    // use mode-specific additional params exclusively (even if empty).
+    // Never fall through to global additional params.
+    if (modelMode && db.seperateParametersEnabled && (modelMode !== 'model' || db.seperateParametersByModel)) {
+        let mode: ModelModeExtended = modelMode
+        if (mode === 'submodel') {
+            mode = 'otherAx'
+        }
+        let sepParams: Record<string, any> | undefined
+        if (db.seperateParametersByModel) {
+            sepParams = db.seperateParameters.overrides[aiModel]
+        } else {
+            sepParams = db.seperateParameters[mode]
+        }
+        if (sepParams) {
+            return [...(sepParams.additionalParams ?? [])]
+        }
     }
 
     if (aiModel === 'reverse_proxy') {

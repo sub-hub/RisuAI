@@ -578,7 +578,7 @@ export async function requestGoogleCloudVertex(arg:RequestDataArgumentExtended):
         body.tools = undefined
     }
 
-    body = applyAdditionalParameters(body, headers, getAdditionalParameters(arg.aiModel))
+    body = applyAdditionalParameters(body, headers, getAdditionalParameters(arg.aiModel, arg.mode))
 
     if(arg.previewBody){
         return {

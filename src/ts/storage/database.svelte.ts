@@ -1283,6 +1283,7 @@ export interface SeparateParameters{
     deepseek_reasoning_effort?: 'high' | 'max'
     outputImageModal?:boolean
     verbosity?:number
+    additionalParams?:[string, string][]
 }
 
 type OutputModal = 'image'|'audio'|'video'

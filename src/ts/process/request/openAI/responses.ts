@@ -801,7 +801,7 @@ export async function requestOpenAIResponseAPI(arg:RequestDataArgumentExtended):
     const headers = buildResponsesHeaders(arg, risuIdentify)
 
     if(aiModel === 'reverse_proxy' || aiModel?.startsWith('xcustom:::')){
-        body = applyAdditionalParameters(body, headers, getAdditionalParameters(aiModel))
+        body = applyAdditionalParameters(body, headers, getAdditionalParameters(aiModel, arg.mode))
     }
     if(!arg.useStreaming){
         body.stream = false

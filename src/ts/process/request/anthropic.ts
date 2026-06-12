@@ -390,7 +390,7 @@ export async function requestClaude(arg:RequestDataArgumentExtended):Promise<req
     }
 
     const bedrock = arg.modelInfo.format === LLMFormat.AWSBedrockClaude
-    const additionalParams = getAdditionalParameters(aiModel)
+    const additionalParams = getAdditionalParameters(aiModel, arg.mode)
     const hasCustomAnthropicBeta = additionalParams.some(([key]) => {
         return key.startsWith('header::') && key.slice('header::'.length).toLocaleLowerCase() === 'anthropic-beta'
     })

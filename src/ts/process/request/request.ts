@@ -626,7 +626,7 @@ async function requestNovelAI(arg:RequestDataArgumentExtended):Promise<requestDa
         "Authorization": "Bearer " + (arg.key ?? db.novelai.token)
     }
 
-    body = applyAdditionalParameters(body, headers, getAdditionalParameters(aiModel))
+    body = applyAdditionalParameters(body, headers, getAdditionalParameters(aiModel, arg.mode))
 
     const da = await globalFetch(aiModel === 'novelai_kayra' ? "https://text.novelai.net/ai/generate" : "https://api.novelai.net/ai/generate", {
         body: body,
@@ -694,7 +694,7 @@ async function requestOobaLegacy(arg:RequestDataArgumentExtended):Promise<reques
         'X-API-KEY': db.mancerHeader
     }
 
-    bodyTemplate = applyAdditionalParameters(bodyTemplate, headers, getAdditionalParameters(aiModel))
+    bodyTemplate = applyAdditionalParameters(bodyTemplate, headers, getAdditionalParameters(aiModel, arg.mode))
 
     if(arg.previewBody){
         return {
@@ -826,7 +826,7 @@ async function requestOoba(arg:RequestDataArgumentExtended):Promise<requestDataR
     }
 
     let headers: Record<string, string> = {}
-    bodyTemplate = applyAdditionalParameters(bodyTemplate, headers, getAdditionalParameters(aiModel))
+    bodyTemplate = applyAdditionalParameters(bodyTemplate, headers, getAdditionalParameters(aiModel, arg.mode))
 
     if(arg.previewBody){
         return {
@@ -995,7 +995,7 @@ async function requestKobold(arg:RequestDataArgumentExtended):Promise<requestDat
         "content-type": "application/json",
     }
 
-    body = applyAdditionalParameters(body, headers, getAdditionalParameters(arg.aiModel)) as KoboldGenerationInputSchema
+    body = applyAdditionalParameters(body, headers, getAdditionalParameters(arg.aiModel, arg.mode)) as KoboldGenerationInputSchema
 
     if(arg.previewBody){
         return {
@@ -1073,7 +1073,7 @@ async function requestNovelList(arg:RequestDataArgumentExtended):Promise<request
         logit_bias_values: (logit_bias_values.length > 0) ? logit_bias_values.join("|") : undefined,
     };
 
-    send_body = applyAdditionalParameters(send_body, headers, getAdditionalParameters(arg.aiModel))
+    send_body = applyAdditionalParameters(send_body, headers, getAdditionalParameters(arg.aiModel, arg.mode))
 
     if(arg.previewBody){
         return {
@@ -1167,7 +1167,7 @@ async function requestOllama(arg:RequestDataArgumentExtended):Promise<requestDat
         think: ollamaThinkMode
     }
 
-    requestBody = applyAdditionalParameters(requestBody, customHeaders, getAdditionalParameters(arg.aiModel))
+    requestBody = applyAdditionalParameters(requestBody, customHeaders, getAdditionalParameters(arg.aiModel, arg.mode))
 
     if(arg.previewBody){
         return {
@@ -1313,7 +1313,7 @@ async function requestCohere(arg:RequestDataArgumentExtended):Promise<requestDat
         "Content-Type": "application/json"
     }
 
-    body = applyAdditionalParameters(body, headers, getAdditionalParameters(arg.aiModel))
+    body = applyAdditionalParameters(body, headers, getAdditionalParameters(arg.aiModel, arg.mode))
     console.log(body)
 
     if(arg.previewBody){
@@ -1409,7 +1409,7 @@ async function requestHorde(arg:RequestDataArgumentExtended):Promise<requestData
         "apikey": apiKey
     }
 
-    let finalBody = applyAdditionalParameters(argument, headers, getAdditionalParameters(arg.aiModel))
+    let finalBody = applyAdditionalParameters(argument, headers, getAdditionalParameters(arg.aiModel, arg.mode))
 
     const da = await fetch("https://stablehorde.net/api/v2/generate/text/async", {
         body: JSON.stringify(finalBody),
@@ -1493,7 +1493,7 @@ async function requestWebLLM(arg:RequestDataArgumentExtended):Promise<requestDat
         typical_p: db.ooba.typical_p,
     } as any
 
-    const finalParams = applyAdditionalParameters(transformersParams, {}, getAdditionalParameters(arg.aiModel))
+    const finalParams = applyAdditionalParameters(transformersParams, {}, getAdditionalParameters(arg.aiModel, arg.mode))
 
     const v = await runTransformers(prompt, realModel, finalParams)
     return {
