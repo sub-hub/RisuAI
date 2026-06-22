@@ -834,8 +834,11 @@
                     <Chat
                         character={createSimpleCharacter(DBState.db.characters[$selectedCharID])}
                         name={DBState.db.characters[$selectedCharID].name}
-                        message={DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].fmIndex === -1 ? DBState.db.characters[$selectedCharID].firstMessage :
-                            DBState.db.characters[$selectedCharID].alternateGreetings[DBState.db.characters[$selectedCharID].chats[DBState.db.characters[$selectedCharID].chatPage].fmIndex]}
+                        message={(() => {
+                            const cha = DBState.db.characters[$selectedCharID]
+                            const chat = cha.chats[cha.chatPage]
+                            return chat.fmIndex === -1 ? cha.firstMessage : (cha.alternateGreetings?.[chat.fmIndex] ?? cha.firstMessage)
+                        })()}
                         role='char'
                         img={getCharImage(DBState.db.characters[$selectedCharID].image, 'css')}
                         idx={-1}
