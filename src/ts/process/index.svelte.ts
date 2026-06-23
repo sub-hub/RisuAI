@@ -24,6 +24,7 @@ import { getGenerationModelString } from "./models/modelString";
 import { connectionOpen, peerRevertChat, peerSafeCheck, peerSync } from "../sync/multiuser";
 import { runInlayScreen } from "./inlayScreen";
 import { addRerolls } from "./prereroll";
+import { validateAndFixFmIndex } from "../characters";
 import { runImageEmbedding } from "./transformers";
 import { hanuraiMemory } from "./memory/hanuraiMemory";
 import { hypaMemoryV2 } from "./memory/hypav2";
@@ -310,6 +311,18 @@ export async function sendChat(chatProcessIndex = -1,arg:{
     const tokenizer = new ChatTokenizer(chatAdditonalTokens, DBState.db.aiModel.startsWith('gpt') ? 'noName' : 'name')
     let currentChat = runCurrentChatFunction(nowChatroom.chats[selectedChat])
     nowChatroom.chats[selectedChat] = currentChat
+
+    // Validate fmIndex for non-group characters before sending.
+    // If fmIndex points to a non-existent alternate greeting, show a popup
+    // giving the user the option to fix it (use default firstMessage or empty message).
+    if (nowChatroom.type !== 'group') {
+        const fmValid = await validateAndFixFmIndex(selectedChar, selectedChat)
+        if (!fmValid) {
+            doingChat.set(false)
+            return false
+        }
+    }
+
     let maxContextTokens = DBState.db.maxContext
 
     chatProcessStage.set(1)
