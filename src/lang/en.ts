@@ -1692,6 +1692,9 @@ export const languageEnglish = {
     convertToModule: "Convert to Module",
     skipSavingAssetsOnWebSync: "Skip Saving Assets on Web Sync",
     applyAdditionalParamsToAll: "Apply Additional Parameters to All Models",
+    validateAndFixFmIndexDesc: (fmIndex: number, altCount: number) => `The first message (index ${fmIndex}) selected for this chat does not exist.\nThis character only has ${altCount} alternate greeting(s).\n\nThe chat will automatically fall back to the default first message,\nwhich may not be what you intended.\n\nHow would you like to fix this?`,
+    validateAndFixFmIndexUseDefault: "Use the default first message",
+    validateAndFixFmIndexUseEmpty: "Use an empty first message",
 } satisfies I18nTranslation;
 
 type I18nTranslationFunction = (...args: any[]) => string;

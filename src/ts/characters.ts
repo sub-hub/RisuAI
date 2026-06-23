@@ -917,11 +917,11 @@ export async function validateAndFixFmIndex(charIndex: number, chatIndex: number
     }
 
     const altCount = cha.alternateGreetings?.length ?? 0
-    const display = `The first message (index ${fmIndex}) selected for this chat does not exist.\nThis character only has ${altCount} alternate greeting(s).\n\nThe chat will automatically fall back to the default first message,\nwhich may not be what you intended.\n\nHow would you like to fix this?`
+    const display = language.validateAndFixFmIndexDesc(fmIndex, altCount)
 
     const choice = await alertSelect([
-        'Use the default first message ',
-        'Use an empty first message',
+        language.validateAndFixFmIndexUseDefault,
+        language.validateAndFixFmIndexUseEmpty,
     ], display)
 
     if (choice === '0') {

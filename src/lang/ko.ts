@@ -1510,4 +1510,7 @@ export const languageKorean = {
     nanoGPTSelectFromList: "목록에서 선택",
     nanoGPTManualInput: "수동 입력",
     nanoGPTManualModelSelect: "수동 모델 선택",
+    validateAndFixFmIndexDesc: (fmIndex: number, altCount: number) => `이 채팅에 선택된 첫 메시지(인덱스 ${fmIndex})가 존재하지 않습니다.\n이 캐릭터는 ${altCount}개의 대체 첫 메시지를 가지고 있습니다.\n\n채팅이 기본 첫 메시지로 자동 전환되며,\n원하지 않는 결과일 수 있습니다.\n\n어떻게 수정하시겠습니까?`,
+    validateAndFixFmIndexUseDefault: "기본 첫 메시지 사용",
+    validateAndFixFmIndexUseEmpty: "비어 있는 첫 메시지 사용",
 } satisfies DeepPartial<typeof import('./en').languageEnglish>
