@@ -5,7 +5,8 @@ import { alertStore, DBState, loadoutModalStore, MobileGUIStack, MobileSideBar, 
 import { language } from "src/lang"
 import { updateTextThemeAndCSS } from "./gui/colorscheme"
 import { defaultHotkeys } from "./defaulthotkeys"
-import { doingChat, previewBody, sendChat } from "./process/index.svelte"
+import { previewBody, sendChat } from "./process/index.svelte"
+import { doingChat } from "./stores.svelte"
 
 export function initHotkey(){
     document.addEventListener('keydown', async (ev) => {
