@@ -935,6 +935,11 @@ export async function validateAndFixFmIndex(charIndex: number, chatIndex: number
         return true
     } else if (choice === '1') {
         // Option B: find or create an empty first message
+        const confirmed = await alertConfirm(language.validateAndFixFmIndexEmptyConfirm)
+        if (!confirmed) {
+            return false
+        }
+
         const emptyIndex = (cha.alternateGreetings ?? []).indexOf('')
         if (emptyIndex !== -1) {
             chat.fmIndex = emptyIndex
