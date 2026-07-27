@@ -446,6 +446,7 @@ export async function importChat(){
                     chat.id = v4()
                 })
                 DBState.db.characters[selectedID].chats.unshift(...chats)
+                changeChatTo(0)
                 await validateAndFixFmIndex(selectedID, 0)
                 alertNormal(language.successImport)
                 return
@@ -463,6 +464,7 @@ export async function importChat(){
                         v.fmIndex ??= -1
                         return v
                     })))
+                    changeChatTo(0)
                     await validateAndFixFmIndex(selectedID, 0)
                     alertNormal(language.successImport)
                     return
@@ -477,6 +479,7 @@ export async function importChat(){
                     das.fmIndex ??= -1
                     das.id = v4()
                     DBState.db.characters[selectedID].chats.unshift(das)
+                    changeChatTo(0)
                     await validateAndFixFmIndex(selectedID, 0)
                     alertNormal(language.successImport)
                     return
@@ -497,6 +500,7 @@ export async function importChat(){
             const json = JSON.parse(chat)
             if(json.message && json.note && json.name && json.localLore){
                 DBState.db.characters[selectedID].chats.unshift(json)
+                changeChatTo(0)
                 await validateAndFixFmIndex(selectedID, 0)
                 alertNormal(language.successImport)
             }
@@ -902,7 +906,7 @@ export async function changeChar(index: number, arg:{
  * Option A: Set fmIndex to -1 (default firstMessage)
  * Option B: Find or create an empty string in alternateGreetings and use its index
  * 
- * @returns true if fmIndex is valid or was fixed; false only on unexpected failure
+ * @returns true if fmIndex is valid or was fixed; false if the user dismissed the popup
  */
 export async function validateAndFixFmIndex(charIndex: number, chatIndex: number): Promise<boolean> {
     const cha = DBState.db.characters[charIndex]
@@ -912,7 +916,7 @@ export async function validateAndFixFmIndex(charIndex: number, chatIndex: number
     const chat = cha.chats[chatIndex]
     const fmIndex = chat.fmIndex ?? -1
 
-    if (fmIndex === -1 || (cha.alternateGreetings && fmIndex < cha.alternateGreetings.length)) {
+    if (fmIndex === -1 || (cha.alternateGreetings && fmIndex >= 0 && Number.isInteger(fmIndex) && fmIndex < cha.alternateGreetings.length)) {
         return true
     }
 
@@ -929,17 +933,19 @@ export async function validateAndFixFmIndex(charIndex: number, chatIndex: number
         chat.fmIndex = -1
         DBState.db.characters[charIndex].chats[chatIndex] = chat
         return true
+    } else if (choice === '1') {
+        // Option B: find or create an empty first message
+        const emptyIndex = (cha.alternateGreetings ?? []).indexOf('')
+        if (emptyIndex !== -1) {
+            chat.fmIndex = emptyIndex
+        } else {
+            cha.alternateGreetings ??= []
+            cha.alternateGreetings.push('')
+            chat.fmIndex = cha.alternateGreetings.length - 1
+        }
+        DBState.db.characters[charIndex].chats[chatIndex] = chat
+        return true
     }
 
-    // Option B: find or create an empty first message
-    const emptyIndex = (cha.alternateGreetings ?? []).indexOf('')
-    if (emptyIndex !== -1) {
-        chat.fmIndex = emptyIndex
-    } else {
-        cha.alternateGreetings ??= []
-        cha.alternateGreetings.push('')
-        chat.fmIndex = cha.alternateGreetings.length - 1
-    }
-    DBState.db.characters[charIndex].chats[chatIndex] = chat
-    return true
+    return false
 }
