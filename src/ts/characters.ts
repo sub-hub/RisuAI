@@ -415,8 +415,9 @@ export async function importChat(){
 
             DBState.db.characters[selectedID].chats.unshift(newChat)
             changeChatTo(0)
-            await validateAndFixFmIndex(selectedID, 0)
-            alertNormal(language.successImport)
+            if (await validateAndFixFmIndex(selectedID, 0)) {
+                alertNormal(language.successImport)
+            }
         }
         else if(dat.name.endsWith('json')){
             const json = JSON.parse(Buffer.from(dat.data).toString('utf-8'))
@@ -447,8 +448,9 @@ export async function importChat(){
                 })
                 DBState.db.characters[selectedID].chats.unshift(...chats)
                 changeChatTo(0)
-                await validateAndFixFmIndex(selectedID, 0)
-                alertNormal(language.successImport)
+                if (await validateAndFixFmIndex(selectedID, 0)) {
+                    alertNormal(language.successImport)
+                }
                 return
             }
             if(json.type === 'risuAllChats' && json.ver === 1){
@@ -465,8 +467,9 @@ export async function importChat(){
                         return v
                     })))
                     changeChatTo(0)
-                    await validateAndFixFmIndex(selectedID, 0)
-                    alertNormal(language.successImport)
+                    if (await validateAndFixFmIndex(selectedID, 0)) {
+                        alertNormal(language.successImport)
+                    }
                     return
                 } else {
                     alertError(language.errors.noData)
@@ -480,8 +483,9 @@ export async function importChat(){
                     das.id = v4()
                     DBState.db.characters[selectedID].chats.unshift(das)
                     changeChatTo(0)
-                    await validateAndFixFmIndex(selectedID, 0)
-                    alertNormal(language.successImport)
+                    if (await validateAndFixFmIndex(selectedID, 0)) {
+                        alertNormal(language.successImport)
+                    }
                     return
                 }
                 else{
@@ -501,8 +505,9 @@ export async function importChat(){
             if(json.message && json.note && json.name && json.localLore){
                 DBState.db.characters[selectedID].chats.unshift(json)
                 changeChatTo(0)
-                await validateAndFixFmIndex(selectedID, 0)
-                alertNormal(language.successImport)
+                if (await validateAndFixFmIndex(selectedID, 0)) {
+                    alertNormal(language.successImport)
+                }
             }
             else{
                 alertError(language.errors.noData)
