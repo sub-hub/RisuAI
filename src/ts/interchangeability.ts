@@ -2,6 +2,7 @@ import { v4 } from 'uuid';
 import type { RisuModule} from './process/modules.ts'
 import type { character, RisuPersona } from './storage/database.svelte.js';
 import { createBlankChar } from "src/ts/characters";
+import { DBState } from "src/ts/stores.svelte";
 
 export function convertModuleToCharacter(m: RisuModule): character {
     const char = createBlankChar()
@@ -24,8 +25,8 @@ export function convertModuleToCharacter(m: RisuModule): character {
 
     for(let i = 0; i < char.globalLore.length; i++){
         const lore = safeStructuredClone(char.globalLore[i])
-        if(lore.content.startsWith('@@indicator phi')){
-            char.replaceGlobalNote = lore.content.replace('@@indicator phi', '').trim()
+        if(lore.content.startsWith('@@indicator global_note')){
+            char.replaceGlobalNote = lore.content.replace('@@indicator global_note', '').trim()
             char.globalLore.splice(i, 1)
             i--
         }
@@ -101,12 +102,13 @@ export function convertCharacterToModule(c: character): RisuModule {
     }
 
     if(c.replaceGlobalNote){
+        const content = c.replaceGlobalNote.replaceAll('{{original}}', DBState.db.globalNote)
         mod.lorebook.push({
             key: "",
             secondkey: "",
             insertorder: 0,
-            comment: "From PHI",
-            content: `@@indicator phi\n\n${c.replaceGlobalNote}`,
+            comment: "From Global Note",
+            content: `@@indicator global_note\n\n${content}`,
             mode: 'constant',
             alwaysActive: true,
             selective: false
