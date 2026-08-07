@@ -1157,7 +1157,7 @@ function wrapToolStream(
                 const content = replaceThoughtBlocks(text, (content) => {
                     reasoningContent += (reasoningContent ? '\n' : '') + content.trim()
                     return ''
-                })
+                }, { stripTrailingNewlines: true })
                 return {
                     content,
                     reasoningContent

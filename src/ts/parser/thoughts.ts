@@ -40,8 +40,12 @@ function matchThoughtBlock(data: string, openIdx: number): { end: number; conten
  * Replaces every <Thoughts>...</Thoughts> block in `data` via `replacer(content)`.
  * Handles nested tags, multiple sequential blocks, and leaves unclosed blocks as-is.
  * Linear in `data` length (indexOf-based, no regex backtracking).
+ *
+ * With `opts.stripTrailingNewlines`, the newlines immediately following each
+ * closing tag are consumed along with the block, matching the legacy regex
+ * behavior (trailing newlines after the closing tag) some callers relied on.
  */
-export function replaceThoughtBlocks(data: string, replacer: (content: string) => string): string {
+export function replaceThoughtBlocks(data: string, replacer: (content: string) => string, opts: { stripTrailingNewlines?: boolean } = {}): string {
     let out = ''
     let cursor = 0
     while (true) {
@@ -55,8 +59,12 @@ export function replaceThoughtBlocks(data: string, replacer: (content: string) =
             out += data.substring(cursor)
             break
         }
+        let end = m.end
+        if (opts.stripTrailingNewlines) {
+            while (end < data.length && data.charCodeAt(end) === 10) end++
+        }
         out += data.substring(cursor, openIdx) + replacer(m.content)
-        cursor = m.end
+        cursor = end
     }
     return out
 }

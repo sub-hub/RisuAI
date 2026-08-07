@@ -1006,7 +1006,7 @@ export async function sendChat(chatProcessIndex = -1,arg:{
                 thoughts.push(p1)
             }
             return ''
-        })
+        }, { stripTrailingNewlines: true })
 
         const assetPromises:Promise<void>[] = []
         formatedChat = formatedChat.replace(/\{\{asset_?prompt::(.+?)\}\}/gmsiu, (match, p1) => {
