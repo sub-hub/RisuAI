@@ -339,7 +339,7 @@ export async function SavePartialLocalBackup(){
             }
             alertWait(message)
 
-            if(!key){
+            if(!key || !key.startsWith('assets/')){
                 continue
             }
             
