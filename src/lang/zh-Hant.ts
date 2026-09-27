@@ -1596,16 +1596,6 @@ export const languageChineseTraditional = {
     "newMessageButtonTopBar": "頂端列",
     "trimStartNewChat": "略過「開始新對話」系統標記",
     "pluginDevelopMode": "外掛開發模式",
-<<<<<<< fix/plugin-permission-scope
-    "fetchLogConsent": "外掛 {} 正在請求存取記錄，此操作可能暴露敏感資訊。是否允許？",
-    "getFullDatabaseConsent": "外掛 {} 正在請求存取完整資料庫，此操作可能暴露敏感資訊。是否允許？",
-    "mainDomAccessConsent": "外掛 {} 正在請求存取主文件，此操作可能暴露敏感資訊。是否允許？",
-    "replacerPermissionConsent": "外掛 {} 正在請求替換對話內容的權限，此操作可能被用於操縱對話。是否允許？",
-    "providerPermissionConsent": "外掛 {} 正在請求存取提供商的權限，此操作可能允許未授權的 API 呼叫。是否允許？",
-    "providerPermissionDenied": "使用者已拒絕外掛存取提供商的權限。",
-    "sendChatConsent": "外掛 {} 正在請求以您的名義發送對話訊息的權限，這將觸發 AI 回應。是否允許？",
-    "pluginV2Warning": "外掛 V2 與 V2.1 版本被視為不安全，並將於未來版本中停用。**請勿使用此版本的外掛。**若您是外掛開發者，請盡快更新至 V3。",
-=======
     "fetchLogConsent": "外掛 {} 正要求讀取記錄，其中可能包含敏感資訊。要允許嗎？",
     "getFullDatabaseConsent": "外掛 {} 正要求存取完整資料庫，其中可能包含敏感資訊。要允許嗎？",
     "mainDomAccessConsent": "外掛 {} 正要求存取 Risuai 主介面的 DOM，其中可能包含敏感資訊。要允許嗎？",
@@ -1614,7 +1604,6 @@ export const languageChineseTraditional = {
     "inlayPermissionConsent": "外掛 {} 正要求存取內嵌內容，這可能讓它讀取、寫入或編輯內嵌資料。要允許嗎？",
     "sendChatConsent": "外掛 {} 正要求以您的名義送出對話訊息，這會觸發 AI 回應。要允許嗎？",
     "pluginV2Warning": "外掛 V2 與 V2.1 被視為不安全，並會在未來版本停止運作。**請勿使用這些版本的外掛。** 若您是此外掛的開發者，請儘快升級至 V3",
->>>>>>> main
     "createFolderOnBranch": "在分支上建立資料夾",
     "hamburgerButtonBottom": "將選單按鈕移至側邊欄底部",
     "partialBackupFirstConfirm": "⚠️ 警告：部分本機備份 ⚠️\n\n此備份只會快速儲存必要資訊。\n\n會包含：\n- 資料庫（對話紀錄、角色、模組、外掛、提示詞、設定等）\n- 角色頭像（主要圖片）\n- 使用者頭像與自訂背景\n- 人設頭像\n- 資料夾圖片\n- 提示詞預設集圖片\n\n⚠️ 不會包含：\n- 情緒立繪\n- 額外角色資源\n- VITS 語音檔案\n- 其他所有額外媒體檔案\n\n此備份檔案**不包含所有角色資源**！\n若需要完整備份，請使用一般本機備份。\n\n確定要繼續嗎？",
