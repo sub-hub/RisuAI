@@ -736,7 +736,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
         removeRisuReplacer: oldApis.removeRisuReplacer,
         addRisuChatListener: async (mode:'output', func:Function) => {
             //permission check, lets use same as replacer
-            const conf = await getPluginPermission(plugin.name, 'replacer', 'periodically');
+            const conf = await getPermission('replacer', 'periodically');
             if(!conf){
                 return;
             }
@@ -749,7 +749,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
         loadPlugins: oldApis.loadPlugins,
         readImage: oldApis.readImage,
         readInlay: async (id: string) => {
-            const conf = await getPluginPermission(plugin.name, 'inlay', 'periodically');
+            const conf = await getPermission('inlay', 'periodically');
             if(!conf){
                 return null;
             }
