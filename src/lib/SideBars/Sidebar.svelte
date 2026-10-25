@@ -130,9 +130,15 @@
     let newRecentChars: sortTypeNormal[] = []
     if(recentCount > 0){
       const interactionOf = (c: sortTypeNormal) => DBState.db.characters[c.index]?.lastInteraction ?? 0
+      // characterOrder is not deduplicated, and the each block below is keyed by index
+      const seen = new Set<number>()
       newRecentChars = newCharImages
         .flatMap((c) => c.type === 'folder' ? c.folder : [c])
-        .filter((c) => interactionOf(c) > 0)
+        .filter((c) => {
+          if (seen.has(c.index) || interactionOf(c) <= 0) return false
+          seen.add(c.index)
+          return true
+        })
         .sort((a, b) => interactionOf(b) - interactionOf(a))
         .slice(0, recentCount)
     }
