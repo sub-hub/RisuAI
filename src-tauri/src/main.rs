@@ -439,14 +439,15 @@ async fn with_idle_timeout<F: std::future::Future>(
 ) -> Result<F::Output, String> {
     match idle_timeout {
         Some(duration) => tokio::time::timeout(duration, future).await.map_err(|_| {
-            json!({
-                "success": false,
-                "body": format!("No data received for {} seconds", duration.as_secs())
-            })
-            .to_string()
+            streamed_fetch_failure(format!("No data received for {} seconds", duration.as_secs()))
         }),
         None => Ok(future.await),
     }
+}
+
+// The frontend JSON.parses this, so the message must be a quoted JSON string
+fn streamed_fetch_failure(body: impl std::fmt::Display) -> String {
+    json!({ "success": false, "body": body.to_string() }).to_string()
 }
 
 // Abort handles of in-flight streamed_fetch calls, keyed by fetch id
@@ -530,7 +531,7 @@ async fn streamed_fetch_inner(
     //parse headers
     let headers_json: Value = match serde_json::from_str(&headers) {
         Ok(h) => h,
-        Err(e) => return format!(r#"{{"success":false, body:{}}}"#, e.to_string()),
+        Err(e) => return streamed_fetch_failure(e),
     };
 
     let mut headers = HeaderMap::new();
@@ -538,11 +539,11 @@ async fn streamed_fetch_inner(
         for (key, value) in obj {
             let header_name = match HeaderName::from_bytes(key.as_bytes()) {
                 Ok(name) => name,
-                Err(e) => return format!(r#"{{"success":false, body:{}}}"#, e.to_string()),
+                Err(e) => return streamed_fetch_failure(e),
             };
             let header_value = match HeaderValue::from_str(value.as_str().unwrap_or("")) {
                 Ok(value) => value,
-                Err(e) => return format!(r#"{{"success":false, body:{}}}"#, e.to_string()),
+                Err(e) => return streamed_fetch_failure(e),
             };
             headers.insert(header_name, header_value);
         }
@@ -585,7 +586,7 @@ async fn streamed_fetch_inner(
         .body(body_decoded)
     }
     else {
-        return format!(r#"{{"success":false, body:"Invalid method"}}"#);
+        return streamed_fetch_failure("Invalid method");
     }
 
     // Local Network Timeout is a total limit, as on the Node server. Otherwise only
@@ -637,11 +638,11 @@ async fn streamed_fetch_inner(
                         match emited {
                             Ok(_) => {}
                             Err(e) => {
-                                return format!(r#"{{"success":false, body:{}}}"#, e.to_string())
+                                return streamed_fetch_failure(e)
                             }
                         }
                     }
-                    Err(e) => return format!(r#"{{"success":false, body:{}}}"#, e.to_string()),
+                    Err(e) => return streamed_fetch_failure(e),
                 }
             }
             app.emit(
@@ -651,7 +652,7 @@ async fn streamed_fetch_inner(
             .unwrap();
             return "{\"success\":true}".to_string();
         }
-        Err(e) => return format!(r#"{{"success":false, body:{}}}"#, e.to_string()),
+        Err(e) => return streamed_fetch_failure(e),
     }
 }
 
