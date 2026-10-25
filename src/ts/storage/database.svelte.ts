@@ -521,6 +521,7 @@ export function setDatabase(data:Database){
     data.hanuraiTokens ??= 1000
     data.textAreaSize ??= 0
     data.sideBarSize ??= 0
+    data.sidebarRecentCount ??= 0
     data.textAreaTextSize ??= 0
     data.combineTranslation ??= false
     data.customPromptTemplateToggle ??= ''
@@ -1059,6 +1060,7 @@ export interface Database{
     hanuraiEnable:boolean
     textAreaSize:number
     sideBarSize:number
+    sidebarRecentCount:number
     textAreaTextSize:number
     combineTranslation:boolean
     dynamicAssets:boolean

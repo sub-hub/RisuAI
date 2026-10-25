@@ -10,6 +10,7 @@ import { updateAnimationSpeed } from '../gui/animation';
 import { guiSizeText, updateGuisize } from '../gui/guisize';
 import { updateTextThemeAndCSS } from '../gui/colorscheme';
 import { CustomGUISettingMenuStore } from '../stores.svelte';
+import { language } from '../../lang';
 
 export const displayThemeSettingsItems: SettingItem[] = [
     {
@@ -261,6 +262,20 @@ export const displayOtherSettingsItems: SettingItem[] = [
     { id: 'display.hideRealm', type: 'check', labelKey: 'hideRealm', bindKey: 'hideRealm', keywords: ['realm', 'hide'] },
     { id: 'display.hideAllImages', type: 'check', labelKey: 'hideAllImages', helpKey: 'hideAllImagesDesc', bindKey: 'hideAllImages', keywords: ['images', 'hide'] },
     { id: 'display.showFolderName', type: 'check', labelKey: 'showFolderNameInIcon', bindKey: 'showFolderName', keywords: ['folder', 'name', 'icon'] },
+    {
+        id: 'display.sidebarRecentCount',
+        type: 'slider',
+        labelKey: 'sidebarRecentCount',
+        bindKey: 'sidebarRecentCount',
+        classes: 'mt-2',
+        options: {
+            min: 0,
+            max: 10,
+            step: 1,
+            customText: (value) => (value === 0 ? language.disabled : `${value}`),
+        },
+        keywords: ['sidebar', 'recent', 'character'],
+    },
     { id: 'display.customBackground', type: 'custom', componentId: 'CustomBackgroundToggle', keywords: ['custom', 'background'] },
     { id: 'display.playMessage', type: 'check', labelKey: 'playMessage', helpKey: 'msgSound', bindKey: 'playMessage', keywords: ['message', 'sound'] },
     { id: 'display.playMessageOnTranslateEnd', type: 'check', labelKey: 'playMessageOnTranslateEnd', bindKey: 'playMessageOnTranslateEnd', keywords: ['translate', 'sound'] },

@@ -30,6 +30,7 @@
     HomeIcon,
     WrenchIcon,
     User2Icon,
+    HistoryIcon,
   } from "@lucide/svelte";
     import {
   addCharacter,
@@ -68,6 +69,7 @@
   type sortTypeNormal = { type:'normal',img: string, index: number, name:string }
   type sortType =  sortTypeNormal|{type:'folder',folder:sortTypeNormal[],id:string, name:string, color:string, img?:string}
   let charImages: sortType[] = $state([]);
+  let recentChars: sortTypeNormal[] = $state([]);
   let IconRounded = $state(false)
   let openFolders:string[] = $state([])
   let currentDrag: DragData | null = $state(null)
@@ -123,6 +125,19 @@
     }
     if (!isEqual(charImages, newCharImages)) {
       charImages = newCharImages;
+    }
+    const recentCount = DBState.db.sidebarRecentCount ?? 0
+    let newRecentChars: sortTypeNormal[] = []
+    if(recentCount > 0){
+      const interactionOf = (c: sortTypeNormal) => DBState.db.characters[c.index]?.lastInteraction ?? 0
+      newRecentChars = newCharImages
+        .flatMap((c) => c.type === 'folder' ? c.folder : [c])
+        .filter((c) => interactionOf(c) > 0)
+        .sort((a, b) => interactionOf(b) - interactionOf(a))
+        .slice(0, recentCount)
+    }
+    if (!isEqual(recentChars, newRecentChars)) {
+      recentChars = newRecentChars;
     }
     if(IconRounded !== DBState.db.roundIcons){
       IconRounded = DBState.db.roundIcons
@@ -540,6 +555,39 @@
   </div>
   {/if}
   <div class="flex grow w-full flex-col items-center overflow-x-hidden overflow-y-auto pr-0">
+    {#if recentChars.length > 0}
+      <div class="mt-2 mb-1 text-textcolor2" title={language.sidebarRecentCount}>
+        <HistoryIcon size={16} />
+      </div>
+      {#each recentChars as char (char.index)}
+        <!-- chaId is left out so scrollToActiveCharacter finds the entry in the main list -->
+        <div class="group relative flex items-center px-2 mb-4" role="listitem">
+          <SidebarIndicator
+            isActive={$selectedCharID === char.index && sideBarMode !== 1}
+          />
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+          <div
+              role="button" tabindex="0"
+              onclick={() => {
+                changeChar(char.index, {reseter});
+              }}
+              onkeydown={(e) => {
+                if (e.key === "Enter") {
+                  changeChar(char.index, {reseter});
+                }
+              }}
+            >
+            <SidebarAvatar
+              src={char.img ? getCharImage(char.img, "plain") : "/none.webp"}
+              size="56"
+              rounded={IconRounded}
+              name={char.name}
+            />
+          </div>
+        </div>
+      {/each}
+      <div class="w-12 border-b border-darkborderc"></div>
+    {/if}
     <div class="h-4 min-h-4 w-14" role="listitem" ondragover={(e) => {
       if(!getCurrentSidebarDrag(e)){ return }
       e.preventDefault()

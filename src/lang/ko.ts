@@ -1052,6 +1052,7 @@ export const languageKorean = {
     "textAreaSize": "텍스트 영역 크기",
     "textAreaTextSize": "텍스트 영역 텍스트 크기",
     "sideBarSize": "사이드바 크기",
+    "sidebarRecentCount": "사이드바 최근 캐릭터 수",
     "embedding": "임베딩",
     "syntax": "문법",
     "run": "실행",

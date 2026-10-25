@@ -1112,6 +1112,8 @@ export function checkCharOrder() {
         if (!ordered.has(charId)) {
             if (charId !== '§temp' && charId !== '§playground' && !char.trashTime) {
                 DBState.db.characterOrder.push(charId)
+                // so a character added without being opened still shows in the sidebar's recent list
+                char.lastInteraction ??= Date.now()
             }
         }
     }

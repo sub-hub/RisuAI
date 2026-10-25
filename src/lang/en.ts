@@ -1193,6 +1193,7 @@ export const languageEnglish = {
     textAreaSize: "Input Area Size",
     textAreaTextSize: "Input Area Text Size",
     sideBarSize: "Sidebar Size",
+    sidebarRecentCount: "Recent Characters in Sidebar",
     embedding: "Embedding",
     syntax: "Syntax",
     run: "Run",
