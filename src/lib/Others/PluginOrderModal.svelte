@@ -118,7 +118,7 @@
         {/if}
         {#if !isPinnedRow}
             <button
-                class="shrink-0 p-1 text-textcolor2 hover:text-textcolor transition-colors disabled:opacity-30"
+                class="plugin-order-up shrink-0 p-1 text-textcolor2 hover:text-textcolor transition-colors"
                 disabled={index === 0}
                 aria-label="Move up"
                 onclick={() => move(index, index - 1)}
@@ -126,7 +126,7 @@
                 <ArrowUp size={16} />
             </button>
             <button
-                class="shrink-0 p-1 text-textcolor2 hover:text-textcolor transition-colors disabled:opacity-30"
+                class="plugin-order-down shrink-0 p-1 text-textcolor2 hover:text-textcolor transition-colors"
                 disabled={index === movable.length - 1}
                 aria-label="Move down"
                 onclick={() => move(index, index + 1)}
@@ -217,5 +217,11 @@
 
     .plugin-order-number::before {
         content: counter(plugin-order);
+    }
+
+    /* Dimmed by position for the same reason, instead of by the disabled state. */
+    .plugin-order-list > div:first-child .plugin-order-up,
+    .plugin-order-list > div:last-child .plugin-order-down {
+        opacity: 0.3;
     }
 </style>
