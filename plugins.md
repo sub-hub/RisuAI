@@ -1442,10 +1442,10 @@ Add clear comments and metadata:
 
 (async () => {
   try {
-    const rootDoc = Risuai.getRootDocument();
+    const rootDoc = await Risuai.getRootDocument();
 
     // Add a status indicator
-    const indicator = rootDoc.createElement('div');
+    const indicator = await rootDoc.createElement('div');
     await indicator.setStyle('position', 'fixed');
     await indicator.setStyle('bottom', '10px');
     await indicator.setStyle('right', '10px');
@@ -1455,7 +1455,7 @@ Add clear comments and metadata:
     await indicator.setStyle('borderRadius', '5px');
     await indicator.setTextContent('Plugin Active');
 
-    const body = rootDoc.querySelector('body');
+    const body = await rootDoc.querySelector('body');
     if (body) {
       await body.appendChild(indicator);
     }
