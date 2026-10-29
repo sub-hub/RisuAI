@@ -1461,9 +1461,21 @@ Add clear comments and metadata:
     }
 
     // Monitor DOM changes
+    // Mark the indicator so the callback can skip its own updates
+    await indicator.setAttribute('x-dom-monitor', 'indicator');
+
     let changeCount = 0;
     const observer = await Risuai.createMutationObserver(async (mutations) => {
-      changeCount += await mutations.length();
+      let counted = 0;
+      for (const mutation of await Risuai.unwarpSafeArray(mutations)) {
+        const target = await mutation.getTarget();
+        // Updating the indicator below is itself a mutation inside body;
+        // counting it would retrigger this callback forever
+        if (await target.getAttribute('x-dom-monitor') === 'indicator') continue;
+        counted++;
+      }
+      if (counted === 0) return;
+      changeCount += counted;
       await indicator.setTextContent(`Changes: ${changeCount}`);
     });
 
