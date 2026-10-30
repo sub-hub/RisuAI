@@ -927,6 +927,7 @@ export const languageEnglish = {
     enableBlockPartialEdit: "Enable Block Partial Edit (Hover to edit individual blocks)",
     enableDragPartialEdit: "Enable Drag Partial Edit (Select text to edit)",
     setNodePassword: "Set your password to security",
+    nodeSetupLinkRequired: "This server has no password yet. Open the setup link printed in the server log (it contains #setup=...) to set one.",
     inputNodePassword: "Input your password. if you can't remember, remove save/__password.txt in your server files and restart the server.",
     simple: "Simple",
     advanced: "Advanced",
