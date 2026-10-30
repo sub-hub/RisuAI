@@ -845,6 +845,7 @@ export const languageEnglish = {
     backupLoadConfirm: "Do you really want to load backup? All datas will be lost!",
     backupLoadConfirm2: "Do you really, really want to load backup? All datas will be lost!",
     pasteAuthCode: "Please copy the auth code from popup and paste it in here:",
+    driveAuthInvalid: "This Google Drive sign-in was not started from this page, so it was ignored. Start the backup or load again from the settings.",
     others: "Others",
     presets: "Presets",
     imageGeneration: "Image Generation",
