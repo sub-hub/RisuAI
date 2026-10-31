@@ -26,6 +26,7 @@
     let movable: RisuPlugin[] = $state.raw([...originalMovable])
     let listElement: HTMLDivElement = $state()
     let sortable: Sortable = null
+    let startNextNode: Node = null
     let pressedBackdrop = false
 
     const changed = $derived(movable.some((p, i) => p.name !== originalMovable[i].name))
@@ -46,6 +47,10 @@
             fallbackClass: 'plugin-order-fallback',
             ghostClass: 'plugin-order-ghost',
             chosenClass: 'plugin-order-chosen',
+            onStart: (evt) => {
+                // A node rather than an index: the last row must stay before Svelte's list anchor.
+                startNextNode = evt.item.nextSibling
+            },
             onEnd: (evt) => {
                 if(evt.oldIndex === evt.newIndex){
                     return
@@ -55,8 +60,7 @@
                     child.style.transform = ''
                     child.style.transition = ''
                 }
-                evt.from.removeChild(evt.item)
-                evt.from.insertBefore(evt.item, evt.from.children[evt.oldIndex] ?? null)
+                evt.from.insertBefore(evt.item, startNextNode)
                 move(evt.oldIndex, evt.newIndex)
             },
         })
