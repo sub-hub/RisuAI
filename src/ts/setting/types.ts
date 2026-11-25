@@ -75,16 +75,20 @@ export interface SettingOptions {
     
     // select
     selectOptions?: SelectOption[];
+    /** Keep a saved value that is not in the visible options instead of resetting it to the last option */
+    keepUnlistedValue?: boolean;
     
     // segmented control
     segmentOptions?: SegmentOption[];
     
     // text, textarea
     placeholder?: string;
-    hideText?: boolean;     // For password-like inputs
-    inputClassName?: string;
-    marginBottom?: boolean;
-    
+    hideText?: boolean | ((ctx: SettingContext) => boolean); // For password-like inputs
+
+    // input element (used by select and slider)
+    inputClassName?: string; // Classes on the select element
+    marginBottom?: boolean;  // Slider bottom margin, on by default
+
     // button
     onClick?: () => void | Promise<void>;
     
@@ -111,6 +115,19 @@ export interface SettingItem {
     
     /** Fallback label if language key doesn't exist */
     fallbackLabel?: string;
+
+    /** Literal text put before the label, e.g. a provider name before "Provider URL" */
+    labelPrefix?: string;
+
+    /** Language key put before the label; takes precedence over labelPrefix */
+    labelPrefixKey?: string;
+
+    /**
+     * What the setting belongs to, e.g. a provider name.
+     * Where the item appears without its page around it (Custom Sidebar and its picker),
+     * it is shown before the label in place of labelPrefix / labelPrefixKey.
+     */
+    group?: string;
     
     /** Key for help tooltip lookup in language.help */
     helpKey?: string;

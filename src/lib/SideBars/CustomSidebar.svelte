@@ -5,7 +5,9 @@
     import type { CustomSideBarItem } from 'src/ts/storage/database.svelte';
     import { language } from 'src/lang';
     import TextInput from '../UI/GUI/TextInput.svelte';
-    import { getFullSettingsData } from 'src/ts/setting/utils';
+    import { checkCondition, getFullSettingsData, getLabel, toSidebarItem } from 'src/ts/setting/utils';
+    import { getSettingContext } from 'src/ts/setting/context';
+    import type { SettingItem } from 'src/ts/setting/types';
     import ModelList from '../UI/ModelList.svelte';
     import { get } from 'svelte/store';
     import SettingRenderer from '../Setting/SettingRenderer.svelte';
@@ -13,6 +15,16 @@
     import { v4 } from 'uuid';
     let configPage:'list'|'add'|'addSettingsSubmenu' = $state('list')
     let search = $state('')
+
+    // Cached so each item keeps one object (the settings data never changes at runtime)
+    const sidebarSettings = new Map<string, SettingItem | undefined>()
+    function getSidebarSetting(id: string) {
+        if (!sidebarSettings.has(id)) {
+            const setting = getFullSettingsData().find(s => s.id === id)
+            sidebarSettings.set(id, setting && toSidebarItem(setting))
+        }
+        return sidebarSettings.get(id)
+    }
 
     let bindedPersona = $derived.by(() => {
 
@@ -81,9 +93,14 @@
                 </button>
             </Button>
         {:else if item.type === 'setting'}
-            <SettingRenderer items={
-                [getFullSettingsData().find(s => s.id === item.subType)]
-            } />
+            {@const setting = getSidebarSetting(item.subType)}
+            {#if setting}
+                <!-- the renderer draws no label for custom components, so name grouped ones here -->
+                {#if setting.type === 'custom' && setting.group && checkCondition(setting, getSettingContext())}
+                    <span class="text-textcolor">{getLabel(setting)}</span>
+                {/if}
+                <SettingRenderer items={[setting]} />
+            {/if}
         {/if}
     {/each}
 </div>

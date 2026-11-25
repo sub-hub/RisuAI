@@ -2,12 +2,22 @@
     import { customSideBarConfigDialogStore, DBState } from "src/ts/stores.svelte";
     import Button from "../UI/GUI/Button.svelte";
     import { language } from "src/lang";
-    import { getFullSettingsData } from "src/ts/setting/utils";
+    import { checkCondition, getFullSettingsData, getSidebarLabel } from "src/ts/setting/utils";
+    import { getSettingContext } from "src/ts/setting/context";
     import TextInput from "../UI/GUI/TextInput.svelte";
+    import CheckInput from "../UI/GUI/CheckInput.svelte";
 
 
     let configPage: "list" | "add" | "addSettingsSubmenu" = $state("list");
     let search = $state("");
+    let showAllSettings = $state(false);
+
+    let settingContext = $derived(getSettingContext());
+    let settingChoices = $derived(
+        getFullSettingsData(search)
+            .map((item) => ({ item, active: checkCondition(item, settingContext) }))
+            .filter(({ active }) => showAllSettings || active),
+    );
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -146,6 +156,7 @@
         {#if configPage === "addSettingsSubmenu"}
             <div class="flex flex-col gap-2">
                 <TextInput bind:value={search} placeholder="Search..." />
+                <CheckInput bind:check={showAllSettings} name="Show settings that are off right now" />
                 <Button
                     onclick={() => {
                         configPage = "add";
@@ -154,19 +165,20 @@
                     Back
                 </Button>
 
-                {#each getFullSettingsData(search) as type}
+                {#each settingChoices as { item: type, active }}
                     <Button
+                        className={active ? "" : "text-textcolor2"}
                         onclick={() => {
                             DBState.db.customSidebarItems.push({
                                 id: crypto.randomUUID(),
                                 type: "setting",
                                 subType: type.id,
-                                label: language[type.labelKey] || type.id,
+                                label: getSidebarLabel(type) || type.id,
                             });
                             configPage = "list";
                         }}
                     >
-                        {language[type.labelKey] || type.id}
+                        {getSidebarLabel(type) || type.id}
                     </Button>
                 {/each}
             </div>

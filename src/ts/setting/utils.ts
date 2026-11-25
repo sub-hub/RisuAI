@@ -6,6 +6,7 @@ import { advancedSettingsItems } from './advancedSettingsData';
 import { basicParameterItems, modelSpecificParameterItems, penaltyParameterItems, samplingParameterItems, seedSetting } from './botSettingsParamsData';
 import { chatFormatSettingsItems } from './chatFormatSettingsData';
 import { displaySettingsItems } from './displaySettingsData.svelte';
+import { imageGenerationSettingsItems } from './imageGenerationSettingsData';
 
 /**
  * Sentinel value representing an uninitialized local state in wrapper components.
@@ -15,10 +16,23 @@ import { displaySettingsItems } from './displaySettingsData.svelte';
 export const UNINITIALIZED = Symbol('uninitialized');
 
 export function getLabel(item: SettingItem): string {
-    if (item.labelKey && (language as any)[item.labelKey]) {
-        return (language as any)[item.labelKey];
-    }
-    return item.fallbackLabel ?? '';
+    const label = (item.labelKey && (language as any)[item.labelKey]) || (item.fallbackLabel ?? '');
+    const prefix = item.labelPrefixKey ? (language as any)[item.labelPrefixKey] : item.labelPrefix;
+    return prefix ? `${prefix} ${label}` : label;
+}
+
+/**
+ * The item as shown without its page around it (Custom Sidebar and its picker):
+ * the group replaces any label prefix, so "WebUI Provider URL" becomes "Stable Diffusion WebUI Provider URL".
+ * Headers are plain text, not settings, and keep their own label.
+ */
+export function toSidebarItem(item: SettingItem): SettingItem {
+    if (!item.group || item.type === 'header') return item;
+    return { ...item, labelPrefix: item.group, labelPrefixKey: undefined };
+}
+
+export function getSidebarLabel(item: SettingItem): string {
+    return getLabel(toSidebarItem(item));
 }
 
 export function getSettingValue(item: SettingItem, ctx: SettingContext): any {
@@ -76,13 +90,15 @@ export function getFullSettingsData(searchTerm = '') {
         modelSpecificParameterItems,
         chatFormatSettingsItems,
         displaySettingsItems,
+        imageGenerationSettingsItems,
     );
 
     if(!searchTerm) return full;
 
     const lowerSearch = searchTerm.toLowerCase();
     return full.filter(item => {
-        const label = getLabel(item).toLowerCase();
+        // only the Custom Sidebar picker searches, so match the labels it shows
+        const label = getSidebarLabel(item).toLowerCase();
         const keywords = item.keywords?.map(k => k.toLowerCase()) || [];
         return label.includes(lowerSearch) || keywords.some(k => k.includes(lowerSearch));
     });

@@ -40,5 +40,5 @@
     size="sm"
     bind:value={localValue}
     placeholder={item.options?.placeholder}
-    hideText={item.options?.hideText}
+    hideText={typeof item.options?.hideText === 'function' ? item.options.hideText(ctx) : item.options?.hideText}
 />

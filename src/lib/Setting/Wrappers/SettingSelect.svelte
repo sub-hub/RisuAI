@@ -37,6 +37,7 @@
 
     // Reset value if current selection becomes hidden
     $effect(() => {
+        if (item.options?.keepUnlistedValue) return;
         const currentValue = untrack(() => localValue);
         if (processedOptions.length > 0 && currentValue !== undefined && !processedOptions.some(o => o.value === currentValue)) {
             localValue = processedOptions[processedOptions.length - 1].value;
@@ -48,7 +49,7 @@
     {getLabel(item)}
     {#if item.helpKey}<Help key={item.helpKey as any}/>{/if}
 </span>
-<SelectInput bind:value={localValue}>
+<SelectInput className={item.options?.inputClassName} bind:value={localValue}>
     {#each processedOptions as opt}
         <OptionInput value={opt.value}>
             {opt.labelKey ? (language as any)[opt.labelKey] : opt.label}
