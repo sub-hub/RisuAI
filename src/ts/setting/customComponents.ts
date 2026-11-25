@@ -31,6 +31,7 @@ import AssetImageUpload from 'src/lib/Setting/Pages/ImageGeneration/AssetImageUp
 import NAIVibeTransfer from 'src/lib/Setting/Pages/ImageGeneration/NAIVibeTransfer.svelte';
 import ComfyWorkflowInput from 'src/lib/Setting/Pages/ImageGeneration/ComfyWorkflowInput.svelte';
 import WavespeedModelSettings from 'src/lib/Setting/Pages/ImageGeneration/WavespeedModelSettings.svelte';
+import MessageActionSettings from 'src/lib/Setting/Pages/Display/MessageActionSettings.svelte';
 
 /**
  * Registry of custom components.
@@ -53,6 +54,7 @@ export const customComponents: Record<string, Component<any>> = {
     'NAIVibeTransfer': NAIVibeTransfer,
     'ComfyWorkflowInput': ComfyWorkflowInput,
     'WavespeedModelSettings': WavespeedModelSettings,
+    'MessageActionSettings': MessageActionSettings,
     // Add more as we migrate complex settings
 } as const;
 
