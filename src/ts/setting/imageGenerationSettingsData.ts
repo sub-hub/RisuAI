@@ -42,7 +42,7 @@ function forProvider(name: ProviderId, items: SettingItem[]): SettingItem[] {
 }
 
 const webuiItems = forProvider('webui', [
-    { id: 'imageGen.webui.apiWarning', type: 'header', fallbackLabel: 'You must use WebUI with --api flag', options: { level: 'warning' } },
+    { id: 'imageGen.webui.apiWarning', type: 'header', classes: 'mt-4', fallbackLabel: 'You must use WebUI with --api flag', options: { level: 'warning' } },
     {
         id: 'imageGen.webui.licenseWarning', type: 'header', options: { level: 'warning' },
         fallbackLabel: 'You must use WebUI without agpl license or use unmodified version with agpl license to observe the contents of the agpl license.',
@@ -53,7 +53,7 @@ const webuiItems = forProvider('webui', [
         condition: () => !isTauri,
     },
     {
-        id: 'imageGen.webui.url', type: 'text', labelPrefix: 'WebUI', labelKey: 'providerURL', bindKey: 'webUiUrl', classes: 'mt-2',
+        id: 'imageGen.webui.url', type: 'text', labelPrefix: 'WebUI', labelKey: 'providerURL', bindKey: 'webUiUrl',
         options: { placeholder: 'https://...' }, keywords: ['webui', 'url'],
     },
     { id: 'imageGen.webui.steps', type: 'number', fallbackLabel: 'Steps', bindKey: 'sdSteps', options: { min: 0, max: 100 }, keywords: ['webui', 'steps'] },
@@ -84,7 +84,7 @@ const webuiItems = forProvider('webui', [
 
 const naiItems = forProvider('novelai', [
     {
-        id: 'imageGen.nai.url', type: 'text', labelPrefix: 'Novel AI', labelKey: 'providerURL', bindKey: 'NAIImgUrl', classes: 'mt-2',
+        id: 'imageGen.nai.url', type: 'text', classes: 'mt-4', labelPrefix: 'Novel AI', labelKey: 'providerURL', bindKey: 'NAIImgUrl',
         options: { placeholder: 'https://image.novelai.net' }, keywords: ['novelai', 'nai', 'url'],
     },
     {
@@ -92,9 +92,8 @@ const naiItems = forProvider('novelai', [
         keywords: ['novelai', 'nai', 'api', 'key'],
     },
     {
-        id: 'imageGen.nai.model', type: 'select', fallbackLabel: 'Model', bindKey: 'NAIImgModel', classes: '',
+        id: 'imageGen.nai.model', type: 'select', fallbackLabel: 'Model', bindKey: 'NAIImgModel',
         options: {
-            inputClassName: 'mb-4',
             keepUnlistedValue: true,
             selectOptions: [
                 'nai-diffusion-5-full',
@@ -111,7 +110,7 @@ const naiItems = forProvider('novelai', [
         keywords: ['novelai', 'nai', 'model'],
     },
     {
-        id: 'imageGen.nai.width', type: 'number', fallbackLabel: 'Width', bindPath: 'NAIImgConfig.width', options: { min: 0, max: 2048 },
+        id: 'imageGen.nai.width', type: 'number', classes: 'mt-4', fallbackLabel: 'Width', bindPath: 'NAIImgConfig.width', options: { min: 0, max: 2048 },
         keywords: ['novelai', 'nai', 'width'],
     },
     {
@@ -119,20 +118,17 @@ const naiItems = forProvider('novelai', [
         keywords: ['novelai', 'nai', 'height'],
     },
     {
-        // V4 models and the others list different samplers, in different orders,
-        // so DPM++ SDE appears twice with opposite conditions to keep each order.
-        id: 'imageGen.nai.sampler', type: 'select', fallbackLabel: 'Sampler', bindPath: 'NAIImgConfig.sampler', classes: '',
+        // V4 models and the others offer different samplers
+        id: 'imageGen.nai.sampler', type: 'select', fallbackLabel: 'Sampler', bindPath: 'NAIImgConfig.sampler',
         options: {
-            inputClassName: 'mb-4',
             keepUnlistedValue: true,
             selectOptions: [
                 { value: 'k_euler_ancestral', label: 'Euler Ancestral' },
                 { value: 'k_dpmpp_2s_ancestral', label: 'DPM++ 2S Ancestral' },
                 { value: 'k_dpmpp_2m_sde', label: 'DPM++ 2M SDE', condition: naiV4 },
-                { value: 'k_dpmpp_sde', label: 'DPM++ SDE', condition: (ctx) => !naiV4(ctx) },
+                { value: 'k_dpmpp_sde', label: 'DPM++ SDE' },
                 { value: 'k_euler', label: 'Euler' },
                 { value: 'k_dpmpp_2m', label: 'DPM++ 2M' },
-                { value: 'k_dpmpp_sde', label: 'DPM++ SDE', condition: naiV4 },
                 { value: 'k_dpmpp_2s', label: 'DPM++ 2S', condition: (ctx) => !naiV4(ctx) },
                 { value: 'ddim_v3', label: 'DDIM', condition: (ctx) => !naiV4(ctx) },
             ],
@@ -141,16 +137,14 @@ const naiItems = forProvider('novelai', [
     },
     {
         id: 'imageGen.nai.noiseSchedule', type: 'select', fallbackLabel: 'Noise Schedule', bindPath: 'NAIImgConfig.noise_schedule',
-        classes: '',
         options: {
-            inputClassName: 'mb-4',
             keepUnlistedValue: true,
             selectOptions: ['native', 'karras', 'exponential', 'polyexponential'].map((value) => ({ value, label: value })),
         },
         keywords: ['novelai', 'nai', 'noise', 'schedule'],
     },
     {
-        id: 'imageGen.nai.steps', type: 'number', fallbackLabel: 'steps', bindPath: 'NAIImgConfig.steps', options: { min: 0, max: 2048 },
+        id: 'imageGen.nai.steps', type: 'number', classes: 'mt-4', fallbackLabel: 'steps', bindPath: 'NAIImgConfig.steps', options: { min: 0, max: 2048 },
         keywords: ['novelai', 'nai', 'steps'],
     },
     {
@@ -162,9 +156,8 @@ const naiItems = forProvider('novelai', [
         options: { min: 0, max: 1 }, keywords: ['novelai', 'nai', 'cfg', 'rescale'],
     },
     {
-        id: 'imageGen.nai.referenceMode', type: 'select', fallbackLabel: 'Image Reference', bindPath: 'NAIImgConfig.reference_mode', classes: '',
+        id: 'imageGen.nai.referenceMode', type: 'select', fallbackLabel: 'Image Reference', bindPath: 'NAIImgConfig.reference_mode',
         options: {
-            inputClassName: 'mb-4',
             keepUnlistedValue: true,
             selectOptions: [
                 { value: '', label: 'None' },
@@ -175,12 +168,12 @@ const naiItems = forProvider('novelai', [
         keywords: ['novelai', 'nai', 'reference', 'vibe', 'character'],
     },
     {
-        id: 'imageGen.nai.vibe', type: 'custom', fallbackLabel: 'Vibe Transfer', componentId: 'NAIVibeTransfer',
+        id: 'imageGen.nai.vibe', type: 'custom', classes: 'mt-4', fallbackLabel: 'Vibe Transfer', componentId: 'NAIVibeTransfer',
         condition: (ctx) => ctx.db.NAIImgConfig.reference_mode === 'vibe',
         keywords: ['novelai', 'nai', 'vibe'],
     },
     {
-        id: 'imageGen.nai.characterImage', type: 'custom', fallbackLabel: 'Character Reference Image', componentId: 'AssetImageUpload',
+        id: 'imageGen.nai.characterImage', type: 'custom', classes: 'mt-4', fallbackLabel: 'Character Reference Image', componentId: 'AssetImageUpload',
         componentProps: {
             config: 'NAIImgConfig', imageKey: 'character_image', base64Key: 'character_base64image',
             note: "Leave blank to use the character's default image.", noteClass: 'mb-2',
@@ -189,22 +182,22 @@ const naiItems = forProvider('novelai', [
         keywords: ['novelai', 'nai', 'character', 'reference', 'image'],
     },
     {
-        id: 'imageGen.nai.styleAware', type: 'check', fallbackLabel: 'Style Aware', bindPath: 'NAIImgConfig.style_aware', classes: 'mb-4',
+        id: 'imageGen.nai.styleAware', type: 'check', fallbackLabel: 'Style Aware', bindPath: 'NAIImgConfig.style_aware',
         condition: (ctx) => ctx.db.NAIImgConfig.reference_mode === 'character' && naiV45(ctx),
         keywords: ['novelai', 'nai', 'style', 'aware'],
     },
     {
-        id: 'imageGen.nai.smea', type: 'check', fallbackLabel: 'Use SMEA', bindPath: 'NAIImgConfig.sm', classes: '',
+        id: 'imageGen.nai.smea', type: 'check', fallbackLabel: 'Use SMEA', bindPath: 'NAIImgConfig.sm',
         condition: (ctx) => naiModelIn('nai-diffusion-3', 'nai-diffusion-furry-3', 'nai-diffusion-2')(ctx) && notDdim(ctx),
         keywords: ['novelai', 'nai', 'smea'],
     },
     {
-        id: 'imageGen.nai.dyn', type: 'check', fallbackLabel: 'Use DYN', bindPath: 'NAIImgConfig.sm_dyn', classes: '',
+        id: 'imageGen.nai.dyn', type: 'check', fallbackLabel: 'Use DYN', bindPath: 'NAIImgConfig.sm_dyn',
         condition: (ctx) => naiModelIn('nai-diffusion-3')(ctx) && notDdim(ctx),
         keywords: ['novelai', 'nai', 'dyn', 'smea'],
     },
     {
-        id: 'imageGen.nai.varietyPlus', type: 'check', fallbackLabel: 'Variety+', bindPath: 'NAIImgConfig.variety_plus', classes: '',
+        id: 'imageGen.nai.varietyPlus', type: 'check', fallbackLabel: 'Variety+', bindPath: 'NAIImgConfig.variety_plus',
         condition: naiModelIn(
             'nai-diffusion-4-5-full', 'nai-diffusion-4-5-curated', 'nai-diffusion-4-full',
             'nai-diffusion-4-curated-preview', 'nai-diffusion-3', 'nai-diffusion-furry-3',
@@ -212,17 +205,17 @@ const naiItems = forProvider('novelai', [
         keywords: ['novelai', 'nai', 'variety'],
     },
     {
-        id: 'imageGen.nai.decrisp', type: 'check', fallbackLabel: 'Decrisp', bindPath: 'NAIImgConfig.decrisp', classes: '',
+        id: 'imageGen.nai.decrisp', type: 'check', fallbackLabel: 'Decrisp', bindPath: 'NAIImgConfig.decrisp',
         condition: naiModelIn('nai-diffusion-3', 'nai-diffusion-furry-3', 'nai-diffusion-2'),
         keywords: ['novelai', 'nai', 'decrisp'],
     },
     {
-        id: 'imageGen.nai.legacyUc', type: 'check', fallbackLabel: 'Use legacy uc', bindPath: 'NAIImgConfig.legacy_uc', classes: '',
+        id: 'imageGen.nai.legacyUc', type: 'check', fallbackLabel: 'Use legacy uc', bindPath: 'NAIImgConfig.legacy_uc',
         condition: naiModelIn('nai-diffusion-4-full', 'nai-diffusion-4-curated-preview'),
         keywords: ['novelai', 'nai', 'legacy', 'uc'],
     },
     {
-        id: 'imageGen.nai.i2i', type: 'check', fallbackLabel: 'Enable I2I', bindKey: 'NAII2I', classes: 'mt-4 mb-4',
+        id: 'imageGen.nai.i2i', type: 'check', fallbackLabel: 'Enable I2I', bindKey: 'NAII2I',
         keywords: ['novelai', 'nai', 'i2i', 'image'],
     },
     {
@@ -235,26 +228,25 @@ const naiItems = forProvider('novelai', [
         keywords: ['novelai', 'nai', 'i2i', 'image'],
     },
     {
-        id: 'imageGen.nai.i2iStrength', type: 'slider', fallbackLabel: 'Strength', bindPath: 'NAIImgConfig.strength', classes: 'mt-2',
-        condition: (ctx) => ctx.db.NAII2I, options: { min: 0, max: 0.99, step: 0.01, fixed: 2, marginBottom: false },
+        id: 'imageGen.nai.i2iStrength', type: 'slider', fallbackLabel: 'Strength', bindPath: 'NAIImgConfig.strength',
+        condition: (ctx) => ctx.db.NAII2I, options: { min: 0, max: 0.99, step: 0.01, fixed: 2 },
         keywords: ['novelai', 'nai', 'i2i', 'strength'],
     },
     {
-        id: 'imageGen.nai.i2iNoise', type: 'slider', fallbackLabel: 'Noise', bindPath: 'NAIImgConfig.noise', classes: 'mt-2',
-        condition: (ctx) => ctx.db.NAII2I, options: { min: 0, max: 0.99, step: 0.01, fixed: 2, marginBottom: false },
+        id: 'imageGen.nai.i2iNoise', type: 'slider', fallbackLabel: 'Noise', bindPath: 'NAIImgConfig.noise',
+        condition: (ctx) => ctx.db.NAII2I, options: { min: 0, max: 0.99, step: 0.01, fixed: 2 },
         keywords: ['novelai', 'nai', 'i2i', 'noise'],
     },
 ]);
 
 const dalleItems = forProvider('dalle', [
     {
-        id: 'imageGen.dalle.key', type: 'text', fallbackLabel: 'OpenAI API Key', bindKey: 'openAIKey', options: { placeholder: 'sk-...' },
+        id: 'imageGen.dalle.key', type: 'text', classes: 'mt-4', fallbackLabel: 'OpenAI API Key', bindKey: 'openAIKey', options: { placeholder: 'sk-...' },
         keywords: ['dalle', 'openai', 'key'],
     },
     {
         id: 'imageGen.dalle.quality', type: 'select', fallbackLabel: 'Dall-E Quality', bindKey: 'dallEQuality',
         options: {
-            inputClassName: 'mt-2 mb-4',
             keepUnlistedValue: true,
             selectOptions: [{ value: 'standard', label: 'Standard' }, { value: 'hd', label: 'HD' }],
         },
@@ -264,13 +256,12 @@ const dalleItems = forProvider('dalle', [
 
 const stabilityItems = forProvider('stability', [
     {
-        id: 'imageGen.stability.key', type: 'text', fallbackLabel: 'Stability API Key', bindKey: 'stabilityKey',
+        id: 'imageGen.stability.key', type: 'text', classes: 'mt-4', fallbackLabel: 'Stability API Key', bindKey: 'stabilityKey',
         options: { placeholder: '...' }, keywords: ['stability', 'key'],
     },
     {
-        id: 'imageGen.stability.model', type: 'select', fallbackLabel: 'Stability Model', bindKey: 'stabilityModel', classes: '',
+        id: 'imageGen.stability.model', type: 'select', fallbackLabel: 'Stability Model', bindKey: 'stabilityModel',
         options: {
-            inputClassName: 'mt-2 mb-4',
             keepUnlistedValue: true,
             selectOptions: [
                 { value: 'ultra', label: 'SD Ultra' },
@@ -282,10 +273,9 @@ const stabilityItems = forProvider('stability', [
         keywords: ['stability', 'model'],
     },
     {
-        id: 'imageGen.stability.style', type: 'select', fallbackLabel: 'SD Core Style', bindKey: 'stabllityStyle', classes: '',
+        id: 'imageGen.stability.style', type: 'select', fallbackLabel: 'SD Core Style', bindKey: 'stabllityStyle',
         condition: (ctx) => ctx.db.stabilityModel === 'core',
         options: {
-            inputClassName: 'mt-2 mb-4',
             keepUnlistedValue: true,
             selectOptions: [
                 { value: '', label: 'Unspecified' },
@@ -314,7 +304,7 @@ const stabilityItems = forProvider('stability', [
 
 const comfyuiItems = forProvider('comfyui', [
     {
-        id: 'imageGen.comfyui.url', type: 'text', labelPrefix: 'ComfyUI', labelKey: 'providerURL', bindKey: 'comfyUiUrl', classes: 'mt-2',
+        id: 'imageGen.comfyui.url', type: 'text', classes: 'mt-4', labelPrefix: 'ComfyUI', labelKey: 'providerURL', bindKey: 'comfyUiUrl',
         options: { placeholder: 'http://127.0.0.1:8188' }, keywords: ['comfyui', 'url'],
     },
     { id: 'imageGen.comfyui.workflow', type: 'custom', labelKey: 'comfyWorkflow', componentId: 'ComfyWorkflowInput', keywords: ['comfyui', 'workflow'] },
@@ -326,7 +316,7 @@ const comfyuiItems = forProvider('comfyui', [
 
 const comfyLegacyItems = forProvider('comfy', [
     {
-        id: 'imageGen.comfy.firstImageWarning', type: 'header', fallbackLabel: 'The first image generated by the prompt will be selected. ',
+        id: 'imageGen.comfy.firstImageWarning', type: 'header', classes: 'mt-4', fallbackLabel: 'The first image generated by the prompt will be selected. ',
         options: { level: 'warning' },
     },
     {
@@ -334,7 +324,7 @@ const comfyLegacyItems = forProvider('comfy', [
         options: { level: 'warning' }, condition: () => !isTauri,
     },
     {
-        id: 'imageGen.comfy.url', type: 'text', labelPrefix: 'ComfyUI', labelKey: 'providerURL', bindKey: 'comfyUiUrl', classes: 'mt-2',
+        id: 'imageGen.comfy.url', type: 'text', labelPrefix: 'ComfyUI', labelKey: 'providerURL', bindKey: 'comfyUiUrl',
         options: { placeholder: 'http://127.0.0.1:8188' }, keywords: ['comfy', 'url'],
     },
     {
@@ -364,19 +354,21 @@ const comfyLegacyItems = forProvider('comfy', [
 ]);
 
 const falItems = forProvider('fal', [
-    { id: 'imageGen.fal.key', type: 'text', fallbackLabel: 'Fal.ai API Key', bindKey: 'falToken', options: { placeholder: '...' }, keywords: ['fal', 'key'] },
     {
-        id: 'imageGen.fal.width', type: 'number', fallbackLabel: 'Width', bindPath: 'sdConfig.width', classes: 'mt-4',
+        id: 'imageGen.fal.key', type: 'text', classes: 'mt-4', fallbackLabel: 'Fal.ai API Key', bindKey: 'falToken',
+        options: { placeholder: '...' }, keywords: ['fal', 'key'],
+    },
+    {
+        id: 'imageGen.fal.width', type: 'number', fallbackLabel: 'Width', bindPath: 'sdConfig.width',
         options: { min: 0, max: 2048 }, keywords: ['fal', 'width'],
     },
     {
-        id: 'imageGen.fal.height', type: 'number', fallbackLabel: 'Height', bindPath: 'sdConfig.height', classes: 'mt-4',
+        id: 'imageGen.fal.height', type: 'number', fallbackLabel: 'Height', bindPath: 'sdConfig.height',
         options: { min: 0, max: 2048 }, keywords: ['fal', 'height'],
     },
     {
         id: 'imageGen.fal.model', type: 'select', fallbackLabel: 'Model', bindKey: 'falModel',
         options: {
-            inputClassName: 'mt-2',
             keepUnlistedValue: true,
             selectOptions: [
                 { value: 'fal-ai/flux/dev', label: 'Flux[Dev]' },
@@ -388,11 +380,11 @@ const falItems = forProvider('fal', [
         keywords: ['fal', 'model', 'flux'],
     },
     {
-        id: 'imageGen.fal.lora', type: 'text', fallbackLabel: 'Lora Model URL', helpKey: 'urllora', bindKey: 'falLora', classes: 'mt-4',
+        id: 'imageGen.fal.lora', type: 'text', classes: 'mt-4', fallbackLabel: 'Lora Model URL', helpKey: 'urllora', bindKey: 'falLora',
         condition: (ctx) => ctx.db.falModel === 'fal-ai/flux-lora', keywords: ['fal', 'lora'],
     },
     {
-        id: 'imageGen.fal.loraScale', type: 'slider', fallbackLabel: 'Lora Weight', bindKey: 'falLoraScale', classes: 'mt-4',
+        id: 'imageGen.fal.loraScale', type: 'slider', fallbackLabel: 'Lora Weight', bindKey: 'falLoraScale',
         condition: (ctx) => ctx.db.falModel === 'fal-ai/flux-lora', options: { min: 0, max: 2, step: 0.01, fixed: 2 },
         keywords: ['fal', 'lora', 'weight'],
     },
@@ -400,13 +392,12 @@ const falItems = forProvider('fal', [
 
 const imagenItems = forProvider('Imagen', [
     {
-        id: 'imageGen.imagen.key', type: 'text', fallbackLabel: 'GoogleAI API Key', bindPath: 'google.accessToken', classes: 'mt-2',
+        id: 'imageGen.imagen.key', type: 'text', classes: 'mt-4', fallbackLabel: 'GoogleAI API Key', bindPath: 'google.accessToken',
         options: { placeholder: '...', hideText: (ctx) => ctx.db.hideApiKey }, keywords: ['imagen', 'google', 'key'],
     },
     {
-        id: 'imageGen.imagen.model', type: 'select', fallbackLabel: 'Model', bindKey: 'ImagenModel', classes: '',
+        id: 'imageGen.imagen.model', type: 'select', fallbackLabel: 'Model', bindKey: 'ImagenModel',
         options: {
-            inputClassName: 'mb-4',
             keepUnlistedValue: true,
             selectOptions: [
                 { value: 'imagen-4.0-generate-001', label: 'Imagen 4' },
@@ -420,9 +411,7 @@ const imagenItems = forProvider('Imagen', [
     {
         id: 'imageGen.imagen.size', type: 'select', fallbackLabel: 'Image size', bindKey: 'ImagenImageSize',
         condition: (ctx) => ctx.db.ImagenModel === 'imagen-4.0-generate-001' || ctx.db.ImagenModel === 'imagen-4.0-ultra-generate-001',
-        classes: '',
         options: {
-            inputClassName: 'mb-4',
             keepUnlistedValue: true,
             selectOptions: [{ value: '1K', label: '1K' }, { value: '2K', label: '2K' }],
         },
@@ -430,9 +419,7 @@ const imagenItems = forProvider('Imagen', [
     },
     {
         id: 'imageGen.imagen.aspectRatio', type: 'select', fallbackLabel: 'Aspect ratio', bindKey: 'ImagenAspectRatio',
-        classes: '',
         options: {
-            inputClassName: 'mb-4',
             keepUnlistedValue: true,
             selectOptions: ['1:1', '3:4', '4:3', '9:16', '16:9'].map((value) => ({ value, label: value })),
         },
@@ -440,9 +427,7 @@ const imagenItems = forProvider('Imagen', [
     },
     {
         id: 'imageGen.imagen.personGeneration', type: 'select', fallbackLabel: 'Person generation', bindKey: 'ImagenPersonGeneration',
-        classes: '',
         options: {
-            inputClassName: 'mb-4',
             keepUnlistedValue: true,
             selectOptions: [
                 { value: 'allow_all', label: 'Allow all' },
@@ -456,7 +441,7 @@ const imagenItems = forProvider('Imagen', [
 
 const openaiCompatItems = forProvider('openai-compat', [
     {
-        id: 'imageGen.openaiCompat.url', type: 'text', fallbackLabel: 'API URL', bindPath: 'openaiCompatImage.url', classes: 'mt-2',
+        id: 'imageGen.openaiCompat.url', type: 'text', classes: 'mt-4', fallbackLabel: 'API URL', bindPath: 'openaiCompatImage.url',
         options: { placeholder: 'https://api.example.com/v1/images/generations' }, keywords: ['openai', 'compatible', 'url'],
     },
     {
@@ -468,9 +453,8 @@ const openaiCompatItems = forProvider('openai-compat', [
         options: { placeholder: 'dall-e-3' }, keywords: ['openai', 'compatible', 'model'],
     },
     {
-        id: 'imageGen.openaiCompat.size', type: 'select', fallbackLabel: 'Image Size', bindPath: 'openaiCompatImage.size', classes: '',
+        id: 'imageGen.openaiCompat.size', type: 'select', fallbackLabel: 'Image Size', bindPath: 'openaiCompatImage.size',
         options: {
-            inputClassName: 'mb-4',
             keepUnlistedValue: true,
             selectOptions: ['1024x1024', '1536x1024', '1024x1536', '512x512', '256x256'].map((value) => ({ value, label: value })),
         },
@@ -478,9 +462,7 @@ const openaiCompatItems = forProvider('openai-compat', [
     },
     {
         id: 'imageGen.openaiCompat.quality', type: 'select', fallbackLabel: 'Quality', bindPath: 'openaiCompatImage.quality',
-        classes: '',
         options: {
-            inputClassName: 'mb-4',
             keepUnlistedValue: true,
             selectOptions: [
                 { value: 'auto', label: 'Auto' },
@@ -495,7 +477,7 @@ const openaiCompatItems = forProvider('openai-compat', [
 
 const wavespeedItems = forProvider('wavespeed', [
     {
-        id: 'imageGen.wavespeed.key', type: 'text', fallbackLabel: 'API Key', bindPath: 'wavespeedImage.key',
+        id: 'imageGen.wavespeed.key', type: 'text', classes: 'mt-4', fallbackLabel: 'API Key', bindPath: 'wavespeedImage.key',
         options: { placeholder: 'sk-...', hideText: (ctx) => ctx.db.hideApiKey }, keywords: ['wavespeed', 'key'],
     },
     {
@@ -512,9 +494,7 @@ export const imageGenerationSettingsItems: SettingItem[] = [
         labelKey: 'provider',
         helpKey: 'sdProvider',
         bindKey: 'sdProvider',
-        classes: 'mt-2',
         options: {
-            inputClassName: 'mt-2 mb-4',
             keepUnlistedValue: true,
             selectOptions: [
                 { value: '', label: 'None' },

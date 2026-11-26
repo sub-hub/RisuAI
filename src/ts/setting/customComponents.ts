@@ -10,6 +10,9 @@
  * 
  * The SettingRenderer will look up the component from this registry
  * and render it dynamically.
+ *
+ * The renderer draws no label for custom items. In the Custom Sidebar an item with a
+ * `group` gets its label drawn above the component (see SettingItem.group).
  */
 
 import type { Component } from 'svelte';

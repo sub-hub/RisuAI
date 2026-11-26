@@ -75,7 +75,11 @@ export interface SettingOptions {
     
     // select
     selectOptions?: SelectOption[];
-    /** Keep a saved value that is not in the visible options instead of resetting it to the last option */
+    /**
+     * By default a select whose saved value is not among the visible options
+     * (for example after a condition hid that option) resets it to the last option,
+     * even when the page is only opened. Set this to keep the saved value as it is.
+     */
     keepUnlistedValue?: boolean;
     
     // segmented control
@@ -83,12 +87,11 @@ export interface SettingOptions {
     
     // text, textarea
     placeholder?: string;
-    hideText?: boolean | ((ctx: SettingContext) => boolean); // For password-like inputs
-
-    // input element (used by select and slider)
-    inputClassName?: string; // Classes on the select element
-    marginBottom?: boolean;  // Slider bottom margin, on by default
-
+    /** For password-like inputs; a function can follow a setting, e.g. (ctx) => ctx.db.hideApiKey */
+    hideText?: boolean | ((ctx: SettingContext) => boolean);
+    inputClassName?: string;
+    marginBottom?: boolean;
+    
     // button
     onClick?: () => void | Promise<void>;
     
@@ -116,16 +119,22 @@ export interface SettingItem {
     /** Fallback label if language key doesn't exist */
     fallbackLabel?: string;
 
-    /** Literal text put before the label, e.g. a provider name before "Provider URL" */
+    /**
+     * Literal text put before the label on the page, e.g. "Novel AI" before language.providerURL.
+     * Like labelKey / fallbackLabel, for labels that combine a name with a translated word.
+     */
     labelPrefix?: string;
 
-    /** Language key put before the label; takes precedence over labelPrefix */
+    /** Language key put before the label on the page; takes precedence over labelPrefix */
     labelPrefixKey?: string;
 
     /**
-     * What the setting belongs to, e.g. a provider name.
-     * Where the item appears without its page around it (Custom Sidebar and its picker),
-     * it is shown before the label in place of labelPrefix / labelPrefixKey.
+     * What the setting belongs to, e.g. its provider ("Stable Diffusion WebUI").
+     * The page already shows this context, so the label there stays short.
+     * Where the item appears alone (Custom Sidebar and its picker), the group is put before the label
+     * instead of labelPrefix / labelPrefixKey (see toSidebarItem), so a prefix should name the same thing.
+     * A custom component draws no label from the renderer; in the sidebar a grouped one gets a line with
+     * its label above it, so a grouped custom component should not draw its own label.
      */
     group?: string;
     

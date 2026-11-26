@@ -12,5 +12,11 @@
 </script>
 
 {#if CustomComponent}
-    <CustomComponent {...item.componentProps} />
+    {#if item.classes}
+        <div class={item.classes}>
+            <CustomComponent {...item.componentProps} />
+        </div>
+    {:else}
+        <CustomComponent {...item.componentProps} />
+    {/if}
 {/if}
